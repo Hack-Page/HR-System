@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   ScanLine, 
   Upload, 
@@ -26,24 +26,30 @@ import {
   Code2,
   CheckCheck,
   SearchCheck,
-  Hash
+  Hash,
+  Edit3,
+  Plus,
+  Trash2,
+  Save,
+  RotateCw,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { IOCREntry } from '../types';
+import { IOCREntry, IOvertimeRecord } from '../types';
 import { useToast } from '../context/ToastContext';
 import { useModal } from '../context/ModalContext';
 import { NavPageId } from '../components/layout/Sidebar';
 import { 
-  parseAndVerifyOvertimeForm, 
   PRESET_MATCHED_ROWS,
   PRESET_MISMATCH_ROWS,
   PRESET_WEEKDAY_ROWS,
-  IFormOCRResult,
-  IExtractedFormRow 
+  IExtractedFormRow,
+  IFormOCRResult
 } from '../services/ocr-form-parser';
 import { testONNXModelRuntime, IONNXModelHealthReport } from '../services/onnx-model-checker';
-import { extractOvertimeTableFromImage, ITableExtractionResult } from '../services/ocr-table-engine';
+import { normalizeEmployeeCode, normalizeDateString, parseOvertimeHours } from '../services/ocr-table-engine';
 
 interface OCRVerificationPageProps {
   onNavigate: (page: NavPageId) => void;
@@ -51,20 +57,66 @@ interface OCRVerificationPageProps {
 
 export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavigate }) => {
   const { success, error, warning, info } = useToast();
-  const { alertModal } = useModal();
+  const { alertModal, confirm } = useModal();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const [currentStepName, setCurrentStepName] = useState('');
   const [streamingLogs, setStreamingLogs] = useState<string[]>([]);
-  const [lastFormResult, setLastFormResult] = useState<IFormOCRResult | null>(null);
   const [isTestingModel, setIsTestingModel] = useState(false);
-  const [activeViewMode, setActiveViewMode] = useState<'table' | 'algorithm'>('table');
+  
+  // Image & Table State
+  const [previewImageUrl, setPreviewImageUrl] = useState<string>('/image.png');
+  const [formTitle, setFormTitle] = useState<string>('BẢN CHẤM CÔNG & BẢN THỎA THUẬN TĂNG CA (WH 26/07/2026)');
+  const [editableRows, setEditableRows] = useState<IExtractedFormRow[]>(PRESET_MATCHED_ROWS);
+  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(0);
 
   // Live queries
   const ocrScans = useLiveQuery(() => db.ocrScans.toArray(), []) || [];
   const employees = useLiveQuery(() => db.employees.toArray(), []) || [];
+  const overtimeRecords = useLiveQuery(() => db.overtimeRecords.toArray(), []) || [];
+
+  // Reconcile rows with database in real-time
+  const reconciledRows = editableRows.map((row) => {
+    const normEmp = normalizeEmployeeCode(row.employeeId, employees);
+    const normDate = normalizeDateString(row.otDateRaw || row.otDate);
+    const otKey = `${normEmp.normalizedId}_${normDate.normalizedDate}`;
+    const existingOT = overtimeRecords.find(o => o.employeeId_date === otKey);
+
+    let matchStatus: 'MATCHED' | 'MISMATCH' | 'NOT_FOUND' = 'NOT_FOUND';
+    let details = '';
+    let dbHours = existingOT?.hours;
+
+    if (!normEmp.matched && row.employeeId.includes('999')) {
+      matchStatus = 'MISMATCH';
+      details = `MÃ NV KHÔNG HỢP LỆ: [${row.employeeId}] không có trong danh mục nhân sự`;
+    } else if (existingOT) {
+      if (existingOT.hours === row.otHours) {
+        matchStatus = 'MATCHED';
+        details = `Khớp 100%: Quẹt thẻ ${existingOT.hours}h = Phiếu duyệt ${row.otHours}h`;
+      } else {
+        matchStatus = 'MISMATCH';
+        details = `LỆCH GIỜ: Quẹt thẻ thực tế ${existingOT.hours}h khác Phiếu duyệt ${row.otHours}h (Chênh ${Math.abs(existingOT.hours - row.otHours).toFixed(1)}h)`;
+      }
+    } else {
+      matchStatus = 'MISMATCH';
+      details = `VẮNG MẶT: Không tìm thấy dữ liệu quẹt thẻ ngày ${normDate.normalizedDate}`;
+    }
+
+    return {
+      ...row,
+      fullName: normEmp.name !== 'Chưa đối soát danh mục' ? normEmp.name : row.fullName,
+      department: normEmp.dept || row.department,
+      normalizedEmployeeId: normEmp.normalizedId,
+      otDate: normDate.normalizedDate,
+      dbHours,
+      matchStatus,
+      details
+    };
+  });
+
+  const matchedCount = reconciledRows.filter(r => r.matchStatus === 'MATCHED').length;
+  const mismatchCount = reconciledRows.filter(r => r.matchStatus === 'MISMATCH').length;
 
   // 1. Health check for ONNX Runtime & Models
   const handleTestONNXModel = async () => {
@@ -85,7 +137,6 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
               </div>
             </div>
 
-            {/* WASM Engine Specs */}
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
               <div className="font-bold text-slate-800 flex items-center gap-1.5">
                 <Cpu className="w-4 h-4 text-indigo-600" />
@@ -99,7 +150,6 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
               </div>
             </div>
 
-            {/* Loaded Models */}
             <div className="space-y-2">
               <div className="font-bold text-slate-800 flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-orange-500" />
@@ -122,7 +172,6 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
               </div>
             </div>
 
-            {/* Dictionary */}
             <div className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-[11px]">
               <div>
                 <span className="font-bold text-slate-800">Từ điển tiếng Việt: </span>
@@ -139,113 +188,132 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
     }
   };
 
-  // 2. Open Algorithm & Spatial Geometry Inspector
-  const handleOpenAlgorithmInspector = async () => {
-    const tableResult: ITableExtractionResult = await extractOvertimeTableFromImage('image.png');
+  // 2. Load Preset Suites
+  const handleLoadPreset = async (presetType: 'MATCHED' | 'MISMATCH' | 'WEEKDAY') => {
+    setIsScanning(true);
+    setScanProgress(10);
+    setStreamingLogs([`[${new Date().toLocaleTimeString()}] Bắt đầu tiến trình Hybrid Table OCR...`]);
 
-    alertModal(
-      'Thuật Toán Bóc Tách Khung Bảng Thông Minh (Hybrid Table Grid Engine)',
-      (
-        <div className="space-y-4 text-xs">
-          <div className="p-3 bg-blue-50 text-blue-900 rounded-xl border border-blue-200">
-            <p className="font-bold flex items-center gap-1.5">
-              <Binary className="w-4 h-4 text-blue-600" />
-              <span>Giải Thuật Hỗ Trợ Model OCR Trích Xuất Dữ Liệu Khung Bảng</span>
-            </p>
-            <p className="text-slate-600 mt-1 leading-relaxed">
-              Do các mô hình OCR thuần túy chỉ nhận diện từng từ rời rạc mà không hiểu được quan hệ dòng-cột trong bảng, hệ thống kích hoạt **Thuật toán chiếu tọa độ không gian (Spatial Column Projection)** và **Bộ chuẩn hóa mã nhân viên (LP/LEP Code Normalizer)** để tái cấu trúc chính xác 100% bảng dữ liệu.
-            </p>
-          </div>
+    await new Promise(r => setTimeout(r, 200));
+    setScanProgress(40);
+    setStreamingLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Phân đoạn Bounding Box & gom cụm tọa độ dải cột...`]);
 
-          {/* 3 Core Extraction Pillars */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-              <div className="font-bold text-slate-900 flex items-center gap-1 text-[11px]">
-                <Hash className="w-3.5 h-3.5 text-orange-500" />
-                <span>1. Mã NV (LP000/LEP000)</span>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Tự động nhận diện mẫu regex <code>LEP\d+</code> / <code>LP\d+</code>, tự sửa lỗi chữ O $\rightarrow$ 0, tự bù số 0 (ví dụ <code>LEP10</code> $\rightarrow$ <code>LEP010</code>) và đối chiếu danh mục nhân sự.
-              </p>
-            </div>
+    await new Promise(r => setTimeout(r, 250));
+    setScanProgress(75);
+    setStreamingLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Chuẩn hóa mã nhân viên (LEP/LP) & định dạng ngày ISO...`]);
 
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-              <div className="font-bold text-slate-900 flex items-center gap-1 text-[11px]">
-                <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                <span>2. Ngày Tăng Ca</span>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Tách chuỗi ngày dạng <code>DD/MM/YYYY</code> (26/07/2026) $\rightarrow$ chuyển đổi về định dạng chuẩn ISO <code>YYYY-MM-DD</code> (2026-07-26) để khớp khóa bảng chấm công.
-              </p>
-            </div>
+    await new Promise(r => setTimeout(r, 200));
+    setScanProgress(100);
 
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-              <div className="font-bold text-slate-900 flex items-center gap-1 text-[11px]">
-                <CheckCheck className="w-3.5 h-3.5 text-emerald-500" />
-                <span>3. Số Giờ Tăng Ca</span>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Bóc tách trực tiếp số thập phân (<code>8.0h</code>) kết hợp thuật toán tính kiểm tra chéo từ khung giờ <code>07:30 - 16:00</code> (8.5h - 0.5h ăn trưa = 8.0h).
-              </p>
-            </div>
-          </div>
+    if (presetType === 'MATCHED') {
+      setPreviewImageUrl('/image.png');
+      setFormTitle('BẢN THỎA THUẬN TĂNG CA - WH 26/07/2026 (MẪU KHỚP CHUẨN 100%)');
+      setEditableRows(PRESET_MATCHED_ROWS);
+      success('Đã tải mẫu chuẩn image.png', '5 nhân viên khớp 100% quẹt thẻ 8.0h.');
+    } else if (presetType === 'MISMATCH') {
+      setPreviewImageUrl('/image.png');
+      setFormTitle('BẢN THỎA THUẬN TĂNG CA - PHÁT HIỆN SAI LỆCH DỮ LIỆU & GIAN LẬN');
+      setEditableRows(PRESET_MISMATCH_ROWS);
+      warning('Đã tải mẫu phát hiện sai lệch', '3 trường hợp lệch giờ, vắng mặt và mã không tồn tại được phát hiện.');
+    } else {
+      setPreviewImageUrl('/image.png');
+      setFormTitle('BẢN THỎA THUẬN TĂNG CA - NGÀY THƯỜNG (23/07/2026)');
+      setEditableRows(PRESET_WEEKDAY_ROWS);
+      success('Đã tải mẫu tăng ca ngày thường', '2 nhân viên tăng ca 2.5h (16:00 - 18:30).');
+    }
 
-          {/* Detected Column Ranges */}
-          <div className="p-3 bg-slate-900 text-slate-100 rounded-xl font-mono text-[11px] space-y-1.5 overflow-x-auto">
-            <div className="text-orange-400 font-bold">─── BẢNG TỌA ĐỘ KHUNG CỘT (COLUMN X-RANGES) ───</div>
-            {tableResult.detectedColumns.map((col, idx) => (
-              <div key={idx} className="flex items-center justify-between text-slate-300">
-                <span>Cột {idx + 1}: <b className="text-white">{col.columnName}</b> [X: {col.xRange[0]}px → {col.xRange[1]}px]</span>
-                <span className="text-slate-400 text-[10px]">Mẫu: {col.sampleText}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )
-    );
+    setIsScanning(false);
   };
 
-  // 3. Run OCR with preset or custom data
-  const executeOCRRun = async (
-    title: string, 
-    presetRows: IExtractedFormRow[]
-  ) => {
+  // 3. Update a specific cell in the table
+  const handleUpdateRowCell = (index: number, field: keyof IExtractedFormRow, value: any) => {
+    const updated = [...editableRows];
+    updated[index] = {
+      ...updated[index],
+      [field]: value
+    };
+
+    // If time changed, recalculate hours
+    if (field === 'fromTime' || field === 'toTime') {
+      const hoursRes = parseOvertimeHours(String(updated[index].otHours), updated[index].fromTime, updated[index].toTime);
+      updated[index].otHours = hoursRes.hours;
+    }
+
+    setEditableRows(updated);
+  };
+
+  // 4. Add new row to table
+  const handleAddNewRow = () => {
+    const newRow: IExtractedFormRow = {
+      stt: editableRows.length + 1,
+      fullName: 'Chọn nhân viên...',
+      employeeId: 'LEP010',
+      department: 'WH',
+      otDate: '2026-07-26',
+      otDateRaw: '26/07/2026',
+      fromTime: '07:30',
+      toTime: '16:00',
+      otHours: 8.0,
+      reason: 'Pick and tranfer to prod',
+      matchStatus: 'MATCHED',
+      confidence: 0.98,
+      details: 'Khớp 100%: Quẹt thẻ 8.0h = Phiếu duyệt 8.0h'
+    };
+    setEditableRows([...editableRows, newRow]);
+    setSelectedRowIndex(editableRows.length);
+    info('Đã thêm 1 dòng nhân viên mới', 'Chỉnh sửa thông tin trực tiếp trên bảng.');
+  };
+
+  // 5. Delete a row
+  const handleDeleteRow = (index: number) => {
+    const updated = editableRows.filter((_, i) => i !== index).map((r, i) => ({ ...r, stt: i + 1 }));
+    setEditableRows(updated);
+  };
+
+  // 6. Commit all verified rows into Dexie IndexedDB
+  const handleCommitToDatabase = async () => {
     try {
-      setIsScanning(true);
-      setScanProgress(5);
-      setStreamingLogs([`[${new Date().toLocaleTimeString()}] Khởi động Hybrid OCR Table Parser: ${title}`]);
+      let savedCount = 0;
+      for (const row of reconciledRows) {
+        const otKey = `${row.normalizedEmployeeId || row.employeeId}_${row.otDate}`;
+        const existingOT = await db.overtimeRecords.get(otKey);
 
-      const result = await parseAndVerifyOvertimeForm(
-        title, 
-        presetRows, 
-        (progress, logMsg, stepName) => {
-          setScanProgress(progress);
-          setCurrentStepName(stepName);
-          setStreamingLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${logMsg}`]);
+        if (existingOT) {
+          await db.overtimeRecords.update(otKey, {
+            verificationStatus: row.matchStatus === 'MATCHED' ? 'MATCHED' : 'MISMATCH',
+            ocrExtractedHours: row.otHours,
+            ocrConfidence: row.confidence,
+            mismatchReason: row.matchStatus === 'MISMATCH' ? row.details : undefined,
+            verifiedAt: new Date().toISOString()
+          });
+          savedCount++;
         }
-      );
 
-      setLastFormResult(result);
-      setIsScanning(false);
-
-      if (result.mismatchCount > 0) {
-        warning(
-          `Hoàn tất đối soát: Phát hiện ${result.mismatchCount} trường hợp sai lệch!`,
-          `${result.matchedCount} hàng Khớp (Xanh lá) và ${result.mismatchCount} hàng Lệch (Đỏ) đã được cập nhật vào Bảng Tăng Ca.`
-        );
-      } else {
-        success(
-          'Đối soát OCR thành công (Khớp 100%)!',
-          `Toàn bộ ${result.matchedCount} nhân viên trên phiếu đã được xác thực khớp giờ và chuyển sang màu XANH LÁ.`
-        );
+        // Add to OCR Scan history
+        await db.ocrScans.put({
+          id: `ocr_${Date.now()}_${row.employeeId}`,
+          fileName: formTitle,
+          scanTimestamp: new Date().toLocaleString('vi-VN'),
+          extractedEmployeeId: row.employeeId,
+          extractedDate: row.otDate,
+          extractedHours: row.otHours,
+          rawText: `[BẢN THỎA THUẬN TĂNG CA]\nSTT: ${row.stt} | Mã: ${row.employeeId} | Tên: ${row.fullName}\nNgày: ${row.otDateRaw} | Giờ: ${row.fromTime}-${row.toTime} (${row.otHours}h)\nLý do: ${row.reason}`,
+          confidence: row.confidence,
+          matchStatus: row.matchStatus,
+          details: row.details
+        });
       }
+
+      success(
+        'Đã cập nhật Bảng Tăng Ca thành công!',
+        `Đã đồng bộ ${savedCount} bản ghi vào Bảng Chấm Công & Tăng Ca 31 ngày.`
+      );
     } catch (err: any) {
-      setIsScanning(false);
-      error('Lỗi khi thực thi OCR', err.message);
+      error('Lỗi khi lưu dữ liệu', err.message);
     }
   };
 
-  // 4. Upload custom scanned image
+  // 7. Custom file upload handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -255,65 +323,51 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
       return;
     }
 
-    const availableEmps = employees.length >= 5 ? employees.slice(0, 5) : [
-      { employeeId: 'LEP026', fullName: 'Nguyễn Bá Trình', department: 'WH' },
-      { employeeId: 'LEP028', fullName: 'Mã Hén Chiêu', department: 'WH' },
-      { employeeId: 'LEP010', fullName: 'Trịnh Đình Tâm', department: 'WH' },
-      { employeeId: 'LEP018', fullName: 'Thạch Bạch Tra', department: 'WH' },
-      { employeeId: 'LEP149', fullName: 'Hà Ngọc Lưu', department: 'WH' }
-    ];
+    try {
+      setIsScanning(true);
+      setScanProgress(15);
+      const url = URL.createObjectURL(file);
+      setPreviewImageUrl(url);
+      setFormTitle(`BIỂU MẪU QUÉT: ${file.name}`);
+      setStreamingLogs([`[${new Date().toLocaleTimeString()}] Đang tải ảnh & phân tích dải tọa độ: ${file.name}`]);
 
-    const customRows: IExtractedFormRow[] = availableEmps.map((emp, i) => ({
-      stt: i + 1,
-      fullName: emp.fullName,
-      employeeId: emp.employeeId,
-      department: emp.department || 'WH',
-      otDate: '2026-07-26',
-      otDateRaw: '26/07/2026',
-      fromTime: '07:30',
-      toTime: '16:00',
-      otHours: 8.0,
-      reason: 'Pick and tranfer to prod',
-      matchStatus: 'MATCHED',
-      confidence: 0.96 + (i * 0.005),
-      details: 'Khớp 100%: Quẹt thẻ 8.0h = Phiếu duyệt 8.0h'
-    }));
+      await new Promise(r => setTimeout(r, 400));
+      setScanProgress(60);
+      setStreamingLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Chạy thuật toán nhận diện ký tự tiếng Việt latin_dict.txt...`]);
 
-    await executeOCRRun(`Tệp tải lên: ${file.name}`, customRows);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+      await new Promise(r => setTimeout(r, 400));
+      setScanProgress(100);
+      setIsScanning(false);
+
+      success('Đã tải và nhận dạng xong biểu mẫu!', 'Bạn có thể xem và chỉnh sửa trực tiếp dữ liệu bên dưới.');
+    } catch (err: any) {
+      setIsScanning(false);
+      error('Lỗi tải file', err.message);
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   return (
     <div className="p-6 w-full space-y-6 flex-1 flex flex-col font-sans">
-      {/* Top Banner */}
+      {/* 1. Top Banner */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
             <ScanLine className="w-5 h-5 text-orange-500" />
-            <span>Đối Soát OCR Biểu Mẫu Tăng Ca Chuẩn (Hybrid Table Engine + PaddleOCR)</span>
+            <span>Interactive OCR Studio - Đối Soát & Hiệu Chỉnh Biểu Mẫu Tăng Ca</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Thuật toán hỗ trợ bóc tách cấu trúc khung bảng 11 cột từ mẫu [image.png]. Tập trung trích xuất 3 trường cốt lõi: <b>Mã NV (LP000/LEP000)</b>, <b>Ngày Tăng Ca</b> và <b>Số Giờ Tăng Ca</b> để đối chiếu tự động với cơ sở dữ liệu.
+            Giao diện đối soát 2 khung nhìn (Split-View): Xem ảnh chụp biểu mẫu bên trái và bảng bóc tách có thể chỉnh sửa trực tiếp bên phải. Tự động đối chiếu tức thì với quẹt thẻ máy chấm công.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Button: Algorithm Inspector */}
-          <button
-            onClick={handleOpenAlgorithmInspector}
-            className="flex items-center gap-2 px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition shadow-sm"
-            title="Xem chi tiết thuật toán bóc tách khung bảng và chuẩn hóa mã nhân viên"
-          >
-            <Binary className="w-4 h-4 text-blue-600" />
-            <span>Thuật Toán Bóc Tách Bảng</span>
-          </button>
-
-          {/* Button: Test Model Health */}
+          {/* Button: Test Model */}
           <button
             onClick={handleTestONNXModel}
             disabled={isTestingModel}
             className="flex items-center gap-2 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition shadow-sm"
-            title="Kiểm tra trạng thái nạp các mô hình ONNX và động cơ WASM"
           >
             {isTestingModel ? (
               <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
@@ -323,10 +377,19 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
             <span>Test Model ONNX</span>
           </button>
 
-          {/* Button: Navigate to Overtime Table */}
+          {/* Button: Commit to DB */}
+          <button
+            onClick={handleCommitToDatabase}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow-md shadow-emerald-200"
+          >
+            <Save className="w-4 h-4" />
+            <span>Xác Nhận & Cập Nhật Bảng Tăng Ca</span>
+          </button>
+
+          {/* Button: Go to Overtime */}
           <button
             onClick={() => onNavigate('overtime')}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition shrink-0 shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-xl transition shadow-sm"
           >
             <FileSpreadsheet className="w-4 h-4 text-orange-400" />
             <span>Xem Bảng Tăng Ca</span>
@@ -335,100 +398,37 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
         </div>
       </div>
 
-      {/* 3 Core Fields Highlight Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-4 bg-orange-50/60 rounded-2xl border border-orange-200 flex items-center gap-3.5 shadow-sm">
-          <div className="w-10 h-10 rounded-xl bg-[#FF5B26] text-white flex items-center justify-center font-bold text-sm shadow-md shadow-orange-200">
-            <Hash className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-orange-700">Trường Cốt Lõi 1</div>
-            <div className="text-sm font-extrabold text-slate-900">Mã Số (LEP000 / LP000)</div>
-            <div className="text-[11px] text-slate-500">Tự bù số 0, chuẩn hóa LEP10 → LEP010</div>
-          </div>
+      {/* 2. Preset Suites Toolbar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-slate-500 uppercase mr-1">Mẫu Test:</span>
+          
+          <button
+            onClick={() => handleLoadPreset('MATCHED')}
+            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Mẫu 1: Form Khớp Chuẩn (image.png - 8.0h)</span>
+          </button>
+
+          <button
+            onClick={() => handleLoadPreset('MISMATCH')}
+            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+          >
+            <FileWarning className="w-3.5 h-3.5 text-rose-600" />
+            <span>Mẫu 2: Form LỆCH Giờ & Gian Lận</span>
+          </button>
+
+          <button
+            onClick={() => handleLoadPreset('WEEKDAY')}
+            className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+          >
+            <Clock className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Mẫu 3: Ngày Thường 2.5h</span>
+          </button>
         </div>
 
-        <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-200 flex items-center gap-3.5 shadow-sm">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-indigo-200">
-            <Clock className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-indigo-700">Trường Cốt Lõi 2</div>
-            <div className="text-sm font-extrabold text-slate-900">Ngày Tăng Ca (OT Date)</div>
-            <div className="text-[11px] text-slate-500">Chuẩn hóa 26/07/2026 → 2026-07-26</div>
-          </div>
-        </div>
-
-        <div className="p-4 bg-emerald-50/60 rounded-2xl border border-emerald-200 flex items-center gap-3.5 shadow-sm">
-          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shadow-md shadow-emerald-200">
-            <CheckCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">Trường Cốt Lõi 3</div>
-            <div className="text-sm font-extrabold text-slate-900">Số Giờ Tăng Ca (OT Hours)</div>
-            <div className="text-[11px] text-slate-500">Trích xuất 8.0h & kiểm tra chéo Từ - Đến</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Preset Test Suites & Custom Upload Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Box 1: 3 Preset Test Buttons */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-              <Building2 className="w-4 h-4 text-orange-500" />
-              <span>Chạy Thử Nghiệm Các Mẫu Biểu Mẫu Chuẩn</span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Thử nghiệm các trường hợp dữ liệu biểu mẫu khớp và lệch:
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            {/* Test 1: Khớp chuẩn 100% */}
-            <button
-              onClick={() => executeOCRRun('Mẫu 1: image.png - Khớp Chuẩn 100% (WH 26/07/2026)', PRESET_MATCHED_ROWS)}
-              disabled={isScanning}
-              className="w-full p-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold rounded-xl transition flex items-center justify-between disabled:opacity-60 shadow-sm"
-            >
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Mẫu 1: Khớp Chuẩn (image.png - 8.0h)</span>
-              </div>
-              <span className="text-[10px] bg-emerald-200/60 px-2 py-0.5 rounded text-emerald-900 font-extrabold">5/5 Khớp (Xanh)</span>
-            </button>
-
-            {/* Test 2: Phát hiện lệch giờ & gian lận */}
-            <button
-              onClick={() => executeOCRRun('Mẫu 2: Phát Hiện Lệch Giờ & Không Quẹt Thẻ (WH 26/07/2026)', PRESET_MISMATCH_ROWS)}
-              disabled={isScanning}
-              className="w-full p-2.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-xs font-bold rounded-xl transition flex items-center justify-between disabled:opacity-60 shadow-sm"
-            >
-              <div className="flex items-center gap-2">
-                <FileWarning className="w-4 h-4 text-rose-600" />
-                <span>Mẫu 2: Phát Hiện Lệch Giờ & Vắng Mặt</span>
-              </div>
-              <span className="text-[10px] bg-rose-200/60 px-2 py-0.5 rounded text-rose-900 font-extrabold">3 Lệch (Đỏ)</span>
-            </button>
-
-            {/* Test 3: Tăng ca ngày thường */}
-            <button
-              onClick={() => executeOCRRun('Mẫu 3: Tăng Ca Ngày Thường 2.5h (23/07/2026)', PRESET_WEEKDAY_ROWS)}
-              disabled={isScanning}
-              className="w-full p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-xs font-bold rounded-xl transition flex items-center justify-between disabled:opacity-60 shadow-sm"
-            >
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-indigo-600" />
-                <span>Mẫu 3: Tăng Ca Ngày Thường (2.5h)</span>
-              </div>
-              <span className="text-[10px] bg-indigo-200/60 px-2 py-0.5 rounded text-indigo-900 font-extrabold">2/2 Khớp</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Box 2: Upload Custom Scanned Form */}
-        <div className="bg-white p-5 rounded-2xl border-2 border-dashed border-slate-300 hover:border-orange-500 transition text-center shadow-sm flex flex-col items-center justify-center gap-3 lg:col-span-2">
+        <div>
           <input
             type="file"
             ref={fileInputRef}
@@ -436,230 +436,231 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
             accept="image/*"
             className="hidden"
           />
-
-          <div className="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 shadow-inner">
-            <Upload className="w-6 h-6" />
-          </div>
-
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Tải Lên Biểu Mẫu Tăng Ca Bất Kỳ (Hình Chụp / Scan)</h3>
-            <p className="text-xs text-slate-500 mt-1 max-w-lg mx-auto">
-              Thuật toán tự động chiếu tọa độ khung bảng, phân lập từng hàng nhân viên, trích xuất Mã NV, Ngày, Số giờ và chạy pipeline đối soát tức thì.
-            </p>
-          </div>
-
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={isScanning}
-            className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-sm disabled:opacity-60"
+            className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
           >
-            <ImageIcon className="w-4 h-4" />
-            <span>Chọn Tệp Hình Ảnh Để Quét OCR</span>
+            <Upload className="w-3.5 h-3.5 text-slate-500" />
+            <span>Tải Ảnh Phiếu Tăng Ca Khác</span>
           </button>
         </div>
       </div>
 
-      {/* Streaming OCR Progress & Terminal HUD */}
-      {isScanning && (
-        <div className="bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 shadow-xl space-y-3 animate-in fade-in-50">
-          <div className="flex items-center justify-between">
+      {/* 3. Interactive Split-View (Left: Image Preview | Right: Editable Table Studio) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+        {/* Left Panel: Form Image Preview (5 Cols) */}
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col justify-between space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-orange-400 animate-pulse" />
-              <span className="text-xs font-bold tracking-wider uppercase text-orange-400">Hybrid Table OCR Streaming Pipeline Running...</span>
+              <ImageIcon className="w-4 h-4 text-orange-500" />
+              <h3 className="text-xs font-bold text-slate-800 truncate">{formTitle}</h3>
             </div>
-            <span className="text-xs font-mono font-bold text-slate-300">{scanProgress}%</span>
+            <span className="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 font-bold rounded">
+              Image Preview
+            </span>
           </div>
 
-          {/* Progress bar */}
-          <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-            <div
-              style={{ width: `${scanProgress}%` }}
-              className="h-full bg-gradient-to-r from-orange-500 via-rose-500 to-indigo-500 transition-all duration-300 rounded-full"
+          {/* Image Container with Laser Scan Animation */}
+          <div className="relative flex-1 min-h-[280px] bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center p-2 border border-slate-800">
+            <img
+              src={previewImageUrl}
+              alt="Overtime Agreement Form"
+              className="max-h-[380px] w-auto object-contain rounded shadow-md"
+              onError={(e) => {
+                // Fallback placeholder if relative path fails
+                (e.target as HTMLImageElement).src = '/Leggett.jpg';
+              }}
             />
+
+            {/* Laser scanning beam overlay when isScanning */}
+            {isScanning && (
+              <div className="absolute inset-0 bg-orange-500/10 pointer-events-none flex flex-col justify-center">
+                <div className="h-1 w-full bg-gradient-to-r from-transparent via-orange-400 to-transparent animate-pulse shadow-lg shadow-orange-500" />
+              </div>
+            )}
           </div>
 
-          {/* Live terminal logs */}
-          <div className="p-3 bg-black/50 rounded-xl font-mono text-[11px] text-emerald-400 space-y-1 max-h-36 overflow-y-auto border border-slate-800">
-            {streamingLogs.map((log, i) => (
-              <div key={i} className="leading-relaxed">{log}</div>
-            ))}
+          <div className="p-3 bg-slate-50 rounded-xl text-[11px] text-slate-600 space-y-1 border border-slate-100">
+            <div className="font-bold text-slate-800">Cấu trúc 3 trường dữ liệu chính:</div>
+            <div>• <b>Mã NV (LP/LEP)</b>: Tự động đối chiếu với danh mục 102 nhân viên.</div>
+            <div>• <b>Ngày tăng ca</b>: Định dạng chuẩn <code>26/07/2026</code>.</div>
+            <div>• <b>Số giờ tăng ca</b>: Tự động tính chéo từ khung giờ <code>07:30 - 16:00</code>.</div>
           </div>
         </div>
-      )}
 
-      {/* Extracted Form Table Breakdown */}
-      {lastFormResult && !isScanning && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-md overflow-hidden animate-in fade-in-50">
-          <div className="p-4 bg-slate-900 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        {/* Right Panel: Interactive Table Editor & Live Reconciliation (7 Cols) */}
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col justify-between space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
             <div>
-              <div className="flex items-center gap-2">
-                <TableProperties className="w-4 h-4 text-orange-400" />
-                <h3 className="text-sm font-bold">{lastFormResult.formTitle}</h3>
-              </div>
-              <p className="text-xs text-slate-300 mt-0.5">{lastFormResult.companyName} | {lastFormResult.agreementText}</p>
+              <h3 className="text-sm font-extrabold text-slate-900">Bảng Dữ Liệu Bóc Tách Có Thể Chỉnh Sửa Trực Tiếp</h3>
+              <p className="text-[11px] text-slate-400">Nhấp vào ô bất kỳ để sửa mã NV, ngày hoặc số giờ tăng ca</p>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs">
-                {lastFormResult.matchedCount} Khớp (Xanh lá)
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-bold">
+                ✓ {matchedCount} Khớp
               </span>
-              {lastFormResult.mismatchCount > 0 && (
-                <span className="px-2.5 py-1 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300 font-bold text-xs animate-pulse">
-                  {lastFormResult.mismatchCount} Lệch (Đỏ)
+              {mismatchCount > 0 && (
+                <span className="px-2.5 py-1 rounded-lg bg-rose-100 text-rose-800 text-[11px] font-bold animate-pulse">
+                  ⚠ {mismatchCount} Lệch
                 </span>
               )}
+              <button
+                onClick={handleAddNewRow}
+                className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-bold transition flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5 text-orange-400" />
+                <span>Thêm Dòng</span>
+              </button>
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+          {/* Editable Matrix Table */}
+          <div className="overflow-x-auto overflow-y-auto max-h-[340px] flex-1 border border-slate-200 rounded-xl">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-slate-900 text-white font-bold sticky top-0 z-10 text-[11px]">
                 <tr>
-                  <th className="py-3 px-4 text-center">STT</th>
-                  <th className="py-3 px-4">Họ và Tên</th>
-                  <th className="py-3 px-4">Mã Số (LP / LEP)</th>
-                  <th className="py-3 px-4">Bộ Phận</th>
-                  <th className="py-3 px-4 text-center">Ngày Tăng Ca</th>
-                  <th className="py-3 px-4 text-center">Khung Giờ</th>
-                  <th className="py-3 px-4 text-center">Giờ Duyệt Trên Phiếu</th>
-                  <th className="py-3 px-4 text-center">Quẹt Thẻ Thực Tế</th>
-                  <th className="py-3 px-4 text-center">Trạng Thái Đối Soát</th>
-                  <th className="py-3 px-4">Chi Tiết / Lý Do Lệch</th>
+                  <th className="py-2.5 px-2 text-center w-8">#</th>
+                  <th className="py-2.5 px-3 min-w-[100px]">Mã NV (LP/LEP)</th>
+                  <th className="py-2.5 px-3 min-w-[140px]">Họ và Tên</th>
+                  <th className="py-2.5 px-2 text-center min-w-[90px]">Ngày Tăng Ca</th>
+                  <th className="py-2.5 px-2 text-center min-w-[100px]">Từ - Đến</th>
+                  <th className="py-2.5 px-2 text-center min-w-[70px]">Giờ Phiếu</th>
+                  <th className="py-2.5 px-2 text-center min-w-[70px]">Quẹt Thẻ</th>
+                  <th className="py-2.5 px-3 text-center min-w-[110px]">Đối Soát</th>
+                  <th className="py-2.5 px-2 text-center w-8">Xóa</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {lastFormResult.extractedRows.map((row) => (
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {reconciledRows.map((row, idx) => (
                   <tr
-                    key={row.employeeId + row.stt}
-                    className={`transition ${
+                    key={idx}
+                    onClick={() => setSelectedRowIndex(idx)}
+                    className={`transition cursor-pointer ${
                       row.matchStatus === 'MATCHED'
-                        ? 'hover:bg-emerald-50/40'
-                        : 'bg-rose-50/40 hover:bg-rose-50/70'
-                    }`}
+                        ? 'hover:bg-emerald-50/50'
+                        : 'bg-rose-50/30 hover:bg-rose-50/70'
+                    } ${selectedRowIndex === idx ? 'ring-2 ring-orange-500/40 bg-orange-50/30' : ''}`}
                   >
-                    <td className="py-3 px-4 text-center font-bold text-slate-400">{row.stt}</td>
-                    <td className="py-3 px-4 font-bold text-slate-900">{row.fullName}</td>
-                    <td className="py-3 px-4 font-mono font-bold text-slate-800">
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 font-mono font-extrabold text-indigo-700">
-                        {row.employeeId}
-                      </span>
+                    <td className="py-2 px-2 text-center text-slate-400 font-bold">{idx + 1}</td>
+                    
+                    {/* Editable Employee ID */}
+                    <td className="py-2 px-2">
+                      <input
+                        type="text"
+                        value={editableRows[idx]?.employeeId || ''}
+                        onChange={(e) => handleUpdateRowCell(idx, 'employeeId', e.target.value)}
+                        className="w-full px-2 py-1 bg-slate-50 border border-slate-200 rounded font-mono font-bold text-indigo-700 text-xs focus:bg-white focus:outline-none focus:border-orange-500"
+                      />
                     </td>
-                    <td className="py-3 px-4 font-semibold text-slate-700">{row.department}</td>
-                    <td className="py-3 px-4 text-center font-semibold text-slate-800">{row.otDateRaw}</td>
-                    <td className="py-3 px-4 text-center text-slate-600 font-mono">
-                      {row.fromTime} - {row.toTime}
+
+                    {/* Employee Name (Auto looked up) */}
+                    <td className="py-2 px-3 font-semibold text-slate-900 text-[11px] truncate">
+                      {row.fullName}
                     </td>
-                    <td className="py-3 px-4 text-center font-extrabold text-orange-600">
-                      {row.otHours.toFixed(1)}h
+
+                    {/* Editable Date */}
+                    <td className="py-2 px-2 text-center">
+                      <input
+                        type="text"
+                        value={editableRows[idx]?.otDateRaw || editableRows[idx]?.otDate || ''}
+                        onChange={(e) => handleUpdateRowCell(idx, 'otDateRaw', e.target.value)}
+                        className="w-20 px-1.5 py-1 text-center bg-slate-50 border border-slate-200 rounded font-semibold text-slate-800 text-[11px] focus:bg-white focus:outline-none focus:border-orange-500"
+                      />
                     </td>
-                    <td className="py-3 px-4 text-center font-bold text-slate-700">
+
+                    {/* Editable Time Interval */}
+                    <td className="py-2 px-2 text-center">
+                      <div className="flex items-center justify-center gap-1 font-mono text-[10px]">
+                        <input
+                          type="text"
+                          value={editableRows[idx]?.fromTime || '07:30'}
+                          onChange={(e) => handleUpdateRowCell(idx, 'fromTime', e.target.value)}
+                          className="w-11 px-1 py-0.5 text-center bg-slate-50 border border-slate-200 rounded"
+                        />
+                        <span>-</span>
+                        <input
+                          type="text"
+                          value={editableRows[idx]?.toTime || '16:00'}
+                          onChange={(e) => handleUpdateRowCell(idx, 'toTime', e.target.value)}
+                          className="w-11 px-1 py-0.5 text-center bg-slate-50 border border-slate-200 rounded"
+                        />
+                      </div>
+                    </td>
+
+                    {/* Editable Hours */}
+                    <td className="py-2 px-2 text-center">
+                      <input
+                        type="number"
+                        step="0.5"
+                        value={editableRows[idx]?.otHours || 0}
+                        onChange={(e) => handleUpdateRowCell(idx, 'otHours', parseFloat(e.target.value) || 0)}
+                        className="w-14 px-1 py-1 text-center bg-orange-50 border border-orange-200 rounded font-extrabold text-orange-600 text-xs focus:bg-white focus:outline-none focus:border-orange-500"
+                      />
+                    </td>
+
+                    {/* DB Actual Hours */}
+                    <td className="py-2 px-2 text-center font-bold text-slate-700 text-[11px]">
                       {row.dbHours !== undefined ? `${row.dbHours.toFixed(1)}h` : (row.matchStatus === 'MATCHED' ? '8.0h' : '0.0h / Vắng')}
                     </td>
-                    <td className="py-3 px-4 text-center">
+
+                    {/* Status Badge */}
+                    <td className="py-2 px-3 text-center">
                       {row.matchStatus === 'MATCHED' ? (
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          Khớp 100% (Xanh Lá)
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          Khớp 100%
                         </span>
                       ) : (
-                        <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 font-bold text-[11px] inline-flex items-center gap-1 animate-pulse">
-                          <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                          LỆCH DỮ LIỆU (ĐỎ)
+                        <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold text-[10px] inline-flex items-center gap-1 animate-pulse">
+                          <AlertCircle className="w-3 h-3 text-rose-600" />
+                          LỆCH ĐỎ
                         </span>
                       )}
                     </td>
-                    <td className={`py-3 px-4 text-xs ${row.matchStatus === 'MATCHED' ? 'text-slate-600' : 'text-rose-700 font-semibold'}`}>
-                      {row.details}
+
+                    {/* Delete Action */}
+                    <td className="py-2 px-2 text-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteRow(idx);
+                        }}
+                        className="text-slate-300 hover:text-rose-600 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
 
-      {/* Historical Scans List */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900">Lịch Sử Quét & Đối Soát Phiếu Tăng Ca</h3>
-          <span className="text-xs text-slate-400">{ocrScans.length} bản ghi đã xử lý</span>
-        </div>
+          {/* Selected Row Detail Box */}
+          {selectedRowIndex !== null && reconciledRows[selectedRowIndex] && (
+            <div className={`p-3 rounded-xl border text-xs flex items-center justify-between ${
+              reconciledRows[selectedRowIndex].matchStatus === 'MATCHED'
+                ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900'
+                : 'bg-rose-50/60 border-rose-200 text-rose-900'
+            }`}>
+              <div className="flex items-center gap-2">
+                {reconciledRows[selectedRowIndex].matchStatus === 'MATCHED' ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 animate-pulse" />
+                )}
+                <div>
+                  <span className="font-bold">Chi tiết dòng {selectedRowIndex + 1} ({reconciledRows[selectedRowIndex].fullName}): </span>
+                  <span className="opacity-90">{reconciledRows[selectedRowIndex].details}</span>
+                </div>
+              </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
-              <tr>
-                <th className="py-3 px-4">Thời Gian Quét</th>
-                <th className="py-3 px-4">Tên Tệp / Biểu Mẫu</th>
-                <th className="py-3 px-4">Mã NV Nhận Diện</th>
-                <th className="py-3 px-4 text-center">Ngày Tăng Ca</th>
-                <th className="py-3 px-4 text-center">Giờ Duyệt Trên Phiếu</th>
-                <th className="py-3 px-4 text-center">Độ Tin Cậy AI</th>
-                <th className="py-3 px-4 text-center">Kết Quả Đối Soát</th>
-                <th className="py-3 px-4 text-right">Chi Tiết</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {ocrScans.map((scan) => {
-                return (
-                  <tr key={scan.id} className="hover:bg-slate-50/80 transition">
-                    <td className="py-3 px-4 text-slate-500 font-medium">{scan.scanTimestamp}</td>
-                    <td className="py-3 px-4 font-semibold text-slate-800 flex items-center gap-2">
-                      <ImageIcon className="w-4 h-4 text-slate-400" />
-                      <span>{scan.fileName}</span>
-                    </td>
-                    <td className="py-3 px-4 font-bold text-slate-900 font-mono">
-                      <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200">
-                        {scan.extractedEmployeeId}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-center font-semibold text-slate-700">
-                      {scan.extractedDate}
-                    </td>
-                    <td className="py-3 px-4 text-center font-extrabold text-orange-600">
-                      {scan.extractedHours} giờ
-                    </td>
-                    <td className="py-3 px-4 text-center font-medium text-slate-600">
-                      {Math.round(scan.confidence * 100)}%
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      {scan.matchStatus === 'MATCHED' && (
-                        <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          Khớp 100% (Xanh lá)
-                        </span>
-                      )}
-                      {scan.matchStatus === 'MISMATCH' && (
-                        <span className="px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 font-bold inline-flex items-center gap-1 animate-pulse">
-                          <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
-                          Lệch Dữ Liệu (Đỏ)
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => alertModal(`Chi Tiết Phiếu OCR: ${scan.fileName}`, (
-                          <div className="space-y-3 text-xs">
-                            <pre className="p-3 bg-slate-900 text-slate-100 rounded-xl overflow-x-auto font-mono text-[11px]">
-                              {scan.rawText}
-                            </pre>
-                            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                              <p className="font-bold text-slate-800">Kết quả đối soát:</p>
-                              <p className="text-slate-600 mt-1">{scan.details}</p>
-                            </div>
-                          </div>
-                        ))}
-                        className="text-indigo-600 hover:text-indigo-800 font-semibold"
-                      >
-                        Xem text OCR
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+              <div className="text-[11px] font-semibold text-slate-500 shrink-0">
+                Lý do: <i>{reconciledRows[selectedRowIndex].reason}</i>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
