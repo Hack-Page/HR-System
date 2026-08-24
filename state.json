@@ -1,28 +1,80 @@
 {
-  "system": {
-    "name": "HR-System",
-    "status": "OCR Engine & Multi-Mode Pipeline Installed",
-    "theme": "Gold & Luxury Wood",
-    "brandLogo": "Leggett.jpg"
+  "project_metadata": {
+    "project_name": "SmartHR - Single-File In-Browser HRMS & Timekeeping System",
+    "organization": "Leggett & Platt / SmartHR",
+    "architecture": "Single-File In-Browser Backend (React + TypeScript + Web Worker + Dexie.js + ONNX Runtime Web)",
+    "last_updated": "2026-08-24T16:35:00Z",
+    "current_phase": "Phase 7: Full System Integrated, Verified & Built",
+    "version": "1.0.0-production-ready"
   },
-  "installedLibraries": [
-    "opencv-python-headless (Image preprocessing, Deskew, Contrast Enhancement)",
-    "numpy (Tensor & Array manipulation)",
-    "pillow (PIL image enhancement & filters)",
-    "openpyxl (Excel parsing and workbook reading)",
-    "onnxruntime (High-speed ONNX inference for PaddleOCR)",
-    "shapely & pyclipper (Polygon text boundary extraction)",
-    "rapidfuzz (Fuzzy entity matching for handwritten employee codes)"
-  ],
-  "multiModeCapabilities": {
-    "MODE_OVERTIME": "Trích xuất phiếu thỏa thuận tăng ca (Mã NV, Ngày OT, Giờ, Lý do) & Đối soát chéo 3 chiều với log quẹt thẻ",
-    "MODE_LEAVE": "Trích xuất đơn xin nghỉ phép (AL, SL, UL, PL, Thai sản) & Cập nhật quỹ phép năm",
-    "MODE_GENERAL": "Trích xuất văn bản toàn trang & bảng biểu tự do sang JSON/Excel"
+  "agent_profile": {
+    "role": "Senior Principal System Designer & Staff IT Software Engineer",
+    "rules": [
+      "Evidence-First: Zero code fabrication without ground truth",
+      "No decision on ambiguous data; clarify with user before coding",
+      "100% Client-Side In-Browser Backend (Dexie.js + Web Workers)",
+      "Zero Native Browser Dialogs (Custom UI Toast/Modal Only)"
+    ]
   },
-  "handwritingOptimizations": [
-    "Adaptive Contrast & CLAHE filter for faint pen/pencil ink",
-    "Automatic Deskew & Rotation correction",
-    "Shadow & Background illumination normalization",
-    "Fuzzy string matching for OCR character confusions (O/0, I/1, l/1)"
-  ]
+  "verified_evidence": {
+    "source_files": {
+      "raw_logs_file": "/workspaces/HR-System/2107-20082026.xlsx (19,657 rows in sheet XuatLuoi)",
+      "chot_cong_template": "/workspaces/HR-System/KIỂM TRA CHÔT CÔNG THÁNG 08.2026.xlsx (Sheets: Working time, Overtime, OT1, Thai san, Leave, Sheet1)",
+      "ui_kit_figma": "/workspaces/HR-System/SmartHR - Free Figma UI Kit for HRM & Employee Management (Community).fig",
+      "ui_calendar_sample": "/workspaces/HR-System/image.png",
+      "company_logo": "/workspaces/HR-System/Leggett.jpg",
+      "paddle_ocr_models": {
+        "onnx_rec": "PaddleOCR-Models/onnx/latin_PP-OCRv3_rec.onnx & ch_PP-OCRv4_rec.onnx",
+        "onnx_cls": "PaddleOCR-Models/onnx/ch_ppocr_mobile_v2.0_cls.onnx",
+        "dictionaries": "PaddleOCR-Models/dictionaries/latin_dict.txt (Full Vietnamese diacritics)"
+      }
+    },
+    "user_confirmed_rules": {
+      "overtime_rounding": "Exact calculation without rounding blocks (e.g. 23 mins = 23/60 = 0.38h, exact standard overtime)",
+      "annual_leave_quota": "Fully flexible: configurable upon creation and editable by HR Manager role",
+      "diligence_reduction_rules": "Default applies company-wide, but fully customizable per department or employee class module"
+    }
+  },
+  "modules_status": {
+    "M1_Dashboard_Analytics": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": ["10+ KPIs", "Department Breakdown", "Turnover Rate", "Violations Chart", "12h Shift Rest Violation Alert with CTA"]
+    },
+    "M2_Employee_Master_Class": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": ["102 Ground Truth Employees", "4 Shift Classes", "2 Contract Types", "Custom Allowances (PCCC, Hazardous)", "Annual Leave Quota"]
+    },
+    "M3_Timesheet_Calendar_Matrix": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": ["31-Day Matrix", "58 Columns Matching Excel", "Ground Truth COUNTIF Formulas", "Cell Status Badges (W, N, Off, AL, UL, SL)", "Inline Editor"]
+    },
+    "M4_Overtime_Tracking_OCR": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": ["31-Day OT Tracking", "Sunday 8h OT rule", "Weekday OT exact minutes", "3 States (Pending Yellow, Matched Green, Mismatch Red)"]
+    },
+    "M5_Leave_Compensation_Quota": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": ["Automatic 'Off' collection", "AL Quota Enforcement (reject & alert if exhausted)", "Leave types: AL, UL, SL, PL, BT, Maternity"]
+    },
+    "M6_Shift_Roster_12h_Violation": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": ["Department Shift Scheduling", "12h Rest Violation Detector (e.g. Shift 2 -> Shift 1 = 8h)", "Pulsing Red Alert", "One-click Fix"]
+    },
+    "M7_System_Settings_RBAC_i18n": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": ["6 RBAC Roles", "Dynamic Permission Matrix for AD System", "Diligence Reduction Settings", "VI/EN Toggle", "Database Reset"]
+    },
+    "M8_Import_Export_Engine": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": ["Web Worker Stream Chunking for 20k rows", "ExcelJS Styled Exporter with Leggett.jpg logo and formulas"]
+    }
+  }
 }

@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased font-sans;
+  }
+}
+
+/* Custom Scrollbar for Excel / Matrix Tables */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Table sticky headers and columns */
+.table-sticky-cell {
+  position: sticky;
+  z-index: 10;
+  background-color: inherit;
+}
+
+.table-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}

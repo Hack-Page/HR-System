@@ -1,0 +1,2450 @@
+[
+  {
+    "employeeId": "LEP001",
+    "erpId": "1013789",
+    "fullName": "Hồ Mỹ Phương",
+    "department": "Finance",
+    "position": "Finance & Accounting Manager",
+    "startDate": "28/04/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_F",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP004",
+    "erpId": "1014096",
+    "fullName": "Lê Thành Hưng",
+    "department": "EHS",
+    "position": "EHS Engineer",
+    "startDate": "09/06/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_F",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP005",
+    "erpId": null,
+    "fullName": "Tô Văn Thiện",
+    "department": "Sales",
+    "position": "Sales Manager for S.E.A.",
+    "startDate": "1/7/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_F",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP007",
+    "erpId": "1014338",
+    "fullName": "Phan Thị Hải Âu",
+    "department": "Finance",
+    "position": "Accountant",
+    "startDate": "14/7/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_F",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP009",
+    "erpId": "1014359",
+    "fullName": "Nguyễn Đăng Khoa",
+    "department": "Logistics",
+    "position": "Logistic Supervisor",
+    "startDate": "21/7/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP010",
+    "erpId": null,
+    "fullName": "Trịnh Đình Tâm",
+    "department": "WH",
+    "position": "Riveting Forklift Driver",
+    "startDate": "4/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 300000,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP011",
+    "erpId": null,
+    "fullName": "Phạm Thanh Hiệp",
+    "department": "Logistics",
+    "position": "Customer Service Representative",
+    "startDate": "4/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP014",
+    "erpId": null,
+    "fullName": "Phạm Hoàng Dinh",
+    "department": "Production",
+    "position": "Riveting Team leader",
+    "startDate": "12/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP018",
+    "erpId": null,
+    "fullName": "Thạch Bạch Tra",
+    "department": "WH",
+    "position": "Warehouse Forklift Driver",
+    "startDate": "18/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 300000,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP022",
+    "erpId": null,
+    "fullName": "Sử Hữu Trí",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "18/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP023",
+    "erpId": null,
+    "fullName": "Phạm Thị Ánh Hồng",
+    "department": "Logistics",
+    "position": "Customer Service Representative",
+    "startDate": "20/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP026",
+    "erpId": null,
+    "fullName": "Nguyễn Bá Trinh",
+    "department": "WH",
+    "position": "WH Operator",
+    "startDate": "21/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 300000,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP027",
+    "erpId": null,
+    "fullName": "Nguyễn Vũ Nguyệt Anh",
+    "department": "QC",
+    "position": "QC Inspector",
+    "startDate": "25/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP028",
+    "erpId": null,
+    "fullName": "Mã Hén Chiêu",
+    "department": "WH",
+    "position": "WH Staff",
+    "startDate": "26/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP029",
+    "erpId": null,
+    "fullName": "Nguyễn Phương Nam",
+    "department": "WH",
+    "position": "WH Forklift Driver",
+    "startDate": "26/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP031",
+    "erpId": null,
+    "fullName": "Dương Tấn Thanh",
+    "department": "WH",
+    "position": "WH Operator",
+    "startDate": "29/8/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP036",
+    "erpId": null,
+    "fullName": "Hà Văn Sáng",
+    "department": "WH",
+    "position": "WH Forklift Driver",
+    "startDate": "8/9/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP040",
+    "erpId": null,
+    "fullName": "Dương Văn Thành",
+    "department": "Finance",
+    "position": "Branch IT Administrator",
+    "startDate": "15/09/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_F",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP045",
+    "erpId": null,
+    "fullName": "Huỳnh Hoài Thương",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "17/09/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP048",
+    "erpId": null,
+    "fullName": "Phan Phước Tài",
+    "department": "Maintenance (PRO)",
+    "position": "Mechanical Maintenance Specialist",
+    "startDate": "25/09/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 300000,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP049",
+    "erpId": null,
+    "fullName": "Ngô Viết Đức",
+    "department": "Maintenance (PRO)",
+    "position": "Electrical Maintenance Specialist",
+    "startDate": "25/09/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 300000,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP052",
+    "erpId": null,
+    "fullName": "Nguyễn Nam Bình",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "30/09/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP054",
+    "erpId": null,
+    "fullName": "Cao Ngọc Linh",
+    "department": "Maintenance (PRO)",
+    "position": "Environmental Protection Equipment",
+    "startDate": "01/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP056",
+    "erpId": null,
+    "fullName": "Đỗ Thế Tài",
+    "department": "Production",
+    "position": "Painting Line Operator",
+    "startDate": "02/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP057",
+    "erpId": null,
+    "fullName": "Lâm Thanh Hiếu",
+    "department": "Production",
+    "position": "Painting Line Operator",
+    "startDate": "02/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP062",
+    "erpId": null,
+    "fullName": "Dương Trung Toàn",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "04/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP066A",
+    "erpId": null,
+    "fullName": "Quách Tam Xuân",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "21/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP067",
+    "erpId": null,
+    "fullName": "H Nguel Kbuor",
+    "department": "Production",
+    "position": "Painting Line Operator",
+    "startDate": "07/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP068",
+    "erpId": null,
+    "fullName": "Y in Zơ Kbuor",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "07/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP069",
+    "erpId": null,
+    "fullName": "Siu Nhoát",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "07/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP073",
+    "erpId": null,
+    "fullName": "Y Sion Kbuor",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "13/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP075",
+    "erpId": null,
+    "fullName": "Trần Văn Trọn",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "15/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP080",
+    "erpId": null,
+    "fullName": "Phạm Hùng Cường",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "17/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP091",
+    "erpId": null,
+    "fullName": "Trần Văn Lựa",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "22/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP100A",
+    "erpId": null,
+    "fullName": "Trần Nhơn Ái",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "09/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP103A",
+    "erpId": null,
+    "fullName": "Đặng Văn Trọng",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "23/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP104",
+    "erpId": null,
+    "fullName": "Nguyễn Quang Linh",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "29/10/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP109",
+    "erpId": null,
+    "fullName": "Nguyễn Hữu Đức",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "07/11/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP112A",
+    "erpId": null,
+    "fullName": "Hồ Thị Lan",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "14/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP113",
+    "erpId": null,
+    "fullName": "Phan Thị Kim Anh",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "18/11/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP114",
+    "erpId": null,
+    "fullName": "Nguyễn Văn Út",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "18/11/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP116A",
+    "erpId": null,
+    "fullName": "Ngô Văn Thảo",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "14/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP127",
+    "erpId": null,
+    "fullName": "Lý Văn Minh Tâm",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "25/11/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP132",
+    "erpId": null,
+    "fullName": "Nguyễn Thị Hương",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "25/11/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP134",
+    "erpId": null,
+    "fullName": "Nguyễn Thị Cẩm Hằng",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "25/11/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP146",
+    "erpId": null,
+    "fullName": "Nguyễn Thị Diệu Minh",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "16/12/2025",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP149",
+    "erpId": null,
+    "fullName": "Hà Ngọc Lưu",
+    "department": "WH",
+    "position": "Warehouse Team Leader",
+    "startDate": "09/01/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP152",
+    "erpId": null,
+    "fullName": "Hoàng Trọng Hiếu",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "27/01/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP158",
+    "erpId": null,
+    "fullName": "Nguyễn Tiến Đạt",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "25/02/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP165A",
+    "erpId": null,
+    "fullName": "Trần Văn Trí",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "26/02/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP169",
+    "erpId": null,
+    "fullName": "Phạm Lí Hùng",
+    "department": "WH",
+    "position": "WH Operator",
+    "startDate": "03/03/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP170",
+    "erpId": null,
+    "fullName": "Phạm Quang Vinh",
+    "department": "WH",
+    "position": "WH Staff",
+    "startDate": "05/03/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP180",
+    "erpId": null,
+    "fullName": "Phạm Văn Giang",
+    "department": "WH",
+    "position": "WH Operator",
+    "startDate": "06/03/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP181C",
+    "erpId": null,
+    "fullName": "Phan Thị Kim Triệu",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "02/03/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP181D",
+    "erpId": null,
+    "fullName": "Nguyễn Diệu Hân",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "11/03/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP181F",
+    "erpId": null,
+    "fullName": "Mã Tứ Hiếu",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "11/03/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP186A",
+    "erpId": null,
+    "fullName": "Võ Thị Minh Trang",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "25/03/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP189",
+    "erpId": null,
+    "fullName": "Lê Minh Lực",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "02/04/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP190",
+    "erpId": null,
+    "fullName": "Cao Thị Oanh",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "02/04/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP191",
+    "erpId": null,
+    "fullName": "Trương Mỹ Nhân",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "02/04/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP194A",
+    "erpId": null,
+    "fullName": "Y Việt Long Ding",
+    "department": "WH",
+    "position": "WH Operator",
+    "startDate": "08/04/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP198",
+    "erpId": null,
+    "fullName": "Mai Thị Kim Xuyến",
+    "department": "Logistics",
+    "position": "Master Planner",
+    "startDate": "20/04/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP202",
+    "erpId": null,
+    "fullName": "Nguyễn Huỳnh Trâm",
+    "department": "Logistics",
+    "position": "Import-Export Specialist",
+    "startDate": "06/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP203",
+    "erpId": null,
+    "fullName": "Danh Minh Trí",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "16/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP204D",
+    "erpId": null,
+    "fullName": "Y' Lưới Hđơk",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "23/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP205",
+    "erpId": null,
+    "fullName": "Y Duân Nie",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "21/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP206",
+    "erpId": null,
+    "fullName": "Lê Ngọc Quyết",
+    "department": "QC",
+    "position": "QC Inspector",
+    "startDate": "22/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP208",
+    "erpId": null,
+    "fullName": "Đào Thanh Phước",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "23/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP209",
+    "erpId": null,
+    "fullName": "Lưu Văn Huy",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "26/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP211",
+    "erpId": null,
+    "fullName": "Ngô Hoàng Quốc Trung",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "26/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP211B",
+    "erpId": null,
+    "fullName": "Nguyễn Gia Hào",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "26/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP214",
+    "erpId": null,
+    "fullName": "Trần Thị Ngọc Hương",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "28/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP215A",
+    "erpId": null,
+    "fullName": "Lý Thị Thúy Kiều",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "28/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP215B",
+    "erpId": null,
+    "fullName": "Lê Tiểu My",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "28/05/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP217",
+    "erpId": null,
+    "fullName": "Nguyễn Văn Công",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "01/06/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP217A",
+    "erpId": null,
+    "fullName": "Trần Hoàng Sang",
+    "department": "QC",
+    "position": "QC Inspector",
+    "startDate": "01/06/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP217B",
+    "erpId": null,
+    "fullName": "Nguyễn Thanh Tâm",
+    "department": "QC",
+    "position": "QC Inspector",
+    "startDate": "01/06/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP217C",
+    "erpId": null,
+    "fullName": "Phan Thị Ngọc Ánh",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "01/06/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP220",
+    "erpId": null,
+    "fullName": "Nguyễn Đăng Khoa",
+    "department": "QC",
+    "position": "Quality Team Leader",
+    "startDate": "05/06/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP221",
+    "erpId": null,
+    "fullName": "Phan Đình Kiên",
+    "department": "Production",
+    "position": "Painting Team Leader",
+    "startDate": "09/06/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP222",
+    "erpId": null,
+    "fullName": "Đỗ Văn Noa",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "17/06/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP225",
+    "erpId": null,
+    "fullName": "Nguyễn Văn Bình",
+    "department": "QC",
+    "position": "QC Inspector",
+    "startDate": "22/06/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP226",
+    "erpId": null,
+    "fullName": "Nguyễn Huy Hoàng",
+    "department": "QC",
+    "position": "QC Inspector",
+    "startDate": "22/06/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP227",
+    "erpId": null,
+    "fullName": "Châu Quốc Bình",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "23/06/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP228",
+    "erpId": null,
+    "fullName": "Phạm Văn Toàn",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "09/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP233",
+    "erpId": null,
+    "fullName": "Sơn Quốc Phát",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "14/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP234",
+    "erpId": null,
+    "fullName": "Nguyễn Thị Thảo Tiên",
+    "department": "Purchasing",
+    "position": "Purchasing Lead",
+    "startDate": "15/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP235",
+    "erpId": null,
+    "fullName": "Nguyễn Thị Phương Thủy",
+    "department": "Admin",
+    "position": "Assistant to Branch Manager",
+    "startDate": "16/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP236",
+    "erpId": null,
+    "fullName": "Lê Thị Tố Uyên",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "13/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP237",
+    "erpId": null,
+    "fullName": "Sơn Văn Vương",
+    "department": "Production",
+    "position": "Painting Line Operator",
+    "startDate": "22/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP239",
+    "erpId": null,
+    "fullName": "Vũ Đình Kiên",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "04/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP240",
+    "erpId": null,
+    "fullName": "Ngô Hoàng Nhiên",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "03/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP241",
+    "erpId": null,
+    "fullName": "Nguyễn Thị Diễm Kiều",
+    "department": "HR",
+    "position": "HR & Admin Manager",
+    "startDate": "03/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_F",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP242",
+    "erpId": null,
+    "fullName": "Trần Minh Tự",
+    "department": "Production",
+    "position": "Painting Line Operator",
+    "startDate": "03/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP244",
+    "erpId": null,
+    "fullName": "Huỳnh Văn Hiền",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "10/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP245",
+    "erpId": null,
+    "fullName": "Trương Thị Thuyền",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "10/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP246",
+    "erpId": null,
+    "fullName": "Bùi Văn Phú",
+    "department": "QC",
+    "position": "QC Inspector",
+    "startDate": "10/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "OFFICE_M_S",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP248",
+    "erpId": null,
+    "fullName": "Phan Ngọc Thanh",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "11/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP249",
+    "erpId": null,
+    "fullName": "Nguyễn Trần Minh Nhật",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "13/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP250",
+    "erpId": null,
+    "fullName": "Bùi Đức Công",
+    "department": "Production",
+    "position": "Riveting Line Operator",
+    "startDate": "14/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP259",
+    "erpId": null,
+    "fullName": "Bùi Lê Anh Tuấn",
+    "department": "Production",
+    "position": "Production Supervisor",
+    "startDate": "17/08/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 0,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  },
+  {
+    "employeeId": "LEP336",
+    "erpId": null,
+    "fullName": "Đỗ Lê Nguyên",
+    "department": "Production",
+    "position": "Production Operator",
+    "startDate": "21/07/2026",
+    "contractType": "OFFICIAL",
+    "shiftClassId": "SHIFT_1",
+    "customAllowances": {
+      "pcccAllowance": 0,
+      "hazardousAllowance": 200000,
+      "diligenceBonus": 500000,
+      "productivityBonus": 0,
+      "tradeUnionFee": -40000,
+      "otherFees": 0
+    },
+    "annualLeaveBalance": {
+      "initialQuota": 12,
+      "usedDays": 0,
+      "remainingDays": 12
+    },
+    "status": "ACTIVE"
+  }
+]
