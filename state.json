@@ -1,0 +1,28 @@
+{
+  "system": {
+    "name": "HR-System",
+    "status": "OCR Engine & Multi-Mode Pipeline Installed",
+    "theme": "Gold & Luxury Wood",
+    "brandLogo": "Leggett.jpg"
+  },
+  "installedLibraries": [
+    "opencv-python-headless (Image preprocessing, Deskew, Contrast Enhancement)",
+    "numpy (Tensor & Array manipulation)",
+    "pillow (PIL image enhancement & filters)",
+    "openpyxl (Excel parsing and workbook reading)",
+    "onnxruntime (High-speed ONNX inference for PaddleOCR)",
+    "shapely & pyclipper (Polygon text boundary extraction)",
+    "rapidfuzz (Fuzzy entity matching for handwritten employee codes)"
+  ],
+  "multiModeCapabilities": {
+    "MODE_OVERTIME": "Trích xuất phiếu thỏa thuận tăng ca (Mã NV, Ngày OT, Giờ, Lý do) & Đối soát chéo 3 chiều với log quẹt thẻ",
+    "MODE_LEAVE": "Trích xuất đơn xin nghỉ phép (AL, SL, UL, PL, Thai sản) & Cập nhật quỹ phép năm",
+    "MODE_GENERAL": "Trích xuất văn bản toàn trang & bảng biểu tự do sang JSON/Excel"
+  },
+  "handwritingOptimizations": [
+    "Adaptive Contrast & CLAHE filter for faint pen/pencil ink",
+    "Automatic Deskew & Rotation correction",
+    "Shadow & Background illumination normalization",
+    "Fuzzy string matching for OCR character confusions (O/0, I/1, l/1)"
+  ]
+}
