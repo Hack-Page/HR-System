@@ -91,7 +91,7 @@ export const ShiftRosterPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6 flex-1 flex flex-col">
+    <div className="p-6 w-full space-y-6 flex-1 flex flex-col">
       {/* Top Banner */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
         <div>

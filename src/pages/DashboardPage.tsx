@@ -145,7 +145,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   }, [stats.departmentChartData]);
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-6 w-full space-y-6">
       {/* Top Welcome & Summary Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
