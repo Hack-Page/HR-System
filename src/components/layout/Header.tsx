@@ -9,7 +9,9 @@ import {
   Loader2, 
   FileSpreadsheet,
   Building2,
-  ChevronDown
+  ChevronDown,
+  Cloud,
+  FolderSync
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -17,6 +19,7 @@ import { useToast } from '../../context/ToastContext';
 import { useModal } from '../../context/ModalContext';
 import { RoleType } from '../../types';
 import { exportTimesheetToExcel } from '../../services/excel-exporter';
+import { exportDatabaseToSnapshot, importDatabaseFromSnapshot } from '../../services/db-sync';
 import { db } from '../../db';
 
 export const Header: React.FC = () => {
@@ -191,6 +194,69 @@ export const Header: React.FC = () => {
         >
           <FileSpreadsheet className="w-4 h-4" />
           <span className="hidden lg:inline">{t('exportExcel')}</span>
+        </button>
+
+        {/* OneDrive Shared Sync Button */}
+        <button
+          onClick={() => {
+            alertModal(
+              'Đồng Bộ Dữ Liệu Dùng Chung (OneDrive Sync)',
+              (
+                <div className="space-y-4 text-xs">
+                  <div className="p-3 bg-blue-50 text-blue-900 rounded-xl border border-blue-200">
+                    <p className="font-bold flex items-center gap-1.5">
+                      <Cloud className="w-4 h-4 text-blue-600" />
+                      <span>Cơ Chế Đồng Bộ Nhiều Người Dùng Qua OneDrive</span>
+                    </p>
+                    <p className="text-slate-600 mt-1 leading-relaxed">
+                      Ứng dụng chạy 100% In-Browser. Để đồng bộ dữ liệu giữa các máy tính (HR Admin, Warehouse, Production, QC), bạn chỉ cần xuất file <b>Snapshot JSON</b> vào thư mục OneDrive dùng chung, hoặc nạp file JSON từ OneDrive.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <button
+                      onClick={async () => {
+                        await exportDatabaseToSnapshot(currentRole);
+                        success('Đã xuất bản ghi Snapshot', 'Lưu file JSON này vào thư mục OneDrive dùng chung.');
+                      }}
+                      className="p-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl flex flex-col items-center justify-center gap-2 transition"
+                    >
+                      <Download className="w-5 h-5 text-orange-400" />
+                      <span>1. Xuất Dữ Liệu Ra OneDrive</span>
+                    </button>
+
+                    <label className="p-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl flex flex-col items-center justify-center gap-2 transition cursor-pointer shadow-md shadow-orange-200">
+                      <Upload className="w-5 h-5" />
+                      <span>2. Nạp Dữ Liệu Từ OneDrive</span>
+                      <input
+                        type="file"
+                        accept=".json"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const res = await importDatabaseFromSnapshot(file);
+                            success(
+                              'Đồng bộ OneDrive thành công!',
+                              `Đã nạp ${res.employeesCount} nhân viên, ${res.timesheetsCount} ô công từ bản ghi của ${res.exportedBy} (${new Date(res.exportedAt).toLocaleTimeString('vi-VN')}).`
+                            );
+                          } catch (err: any) {
+                            error('Lỗi nạp file đồng bộ', err.message);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              )
+            );
+          }}
+          className="flex items-center gap-2 px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold rounded-xl transition"
+          title="Đồng bộ dữ liệu đa người dùng qua thư mục OneDrive dùng chung"
+        >
+          <Cloud className="w-4 h-4 text-blue-600" />
+          <span className="hidden xl:inline">Đồng Bộ OneDrive</span>
         </button>
 
         {/* Language Toggle Button */}
