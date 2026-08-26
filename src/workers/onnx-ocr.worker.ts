@@ -33,7 +33,9 @@ const MODEL_PATHS = {
 // Lưu ý: model classifier ch_ppocr_mobile_v2.0_cls.onnx trong repo có node Concat
 // lỗi opset khiến ORT >= 1.20 từ chối nạp. Thay vào đó dùng chiến lược "quét 2 chiều":
 // nhận dạng 180° khi kết quả thường có độ tin cậy thấp, chọn hướng tốt hơn (đo thật).
-const DICT_URL = '/PaddleOCR-Models/dictionaries/latin_dict.txt';
+// Vietnamese HR dict preferred, fallback to latin
+const DICT_URL_VI = '/PaddleOCR-Models/dictionaries/vi_dict.txt';
+const DICT_URL_LATIN = '/PaddleOCR-Models/dictionaries/latin_dict.txt';
 
 const DET_LIMIT_SIDE = 960;      // giới hạn cạnh lớn trước khi đưa vào det
 const DET_BIN_THRESH = 0.3;      // ngưỡng binarize bản đồ xác suất DBNet
@@ -72,7 +74,14 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
 }
 
 async function loadCharset(): Promise<{ charset: string[]; dictSize: number }> {
-  const text = await (await fetch(DICT_URL)).text();
+  // Try Vietnamese dict first, fallback to Latin
+  let text: string;
+  try {
+    const res = await fetch(DICT_URL_VI);
+    if (res.ok) { text = await res.text(); } else { throw new Error('vi_dict not found'); }
+  } catch {
+    text = await (await fetch(DICT_URL_LATIN)).text();
+  }
   const dict = text.split('\n').map(l => l.replace(/\r$/, ''));
   // File dict chính thức có dòng cuối rỗng do trailing newline
   while (dict.length > 0 && dict[dict.length - 1] === '') dict.pop();
