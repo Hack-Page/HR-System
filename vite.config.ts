@@ -10,10 +10,18 @@ export default defineConfig({
     tailwindcss(),
     viteSingleFile()
   ],
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}']
+  },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src')
-    }
+    },
+    // Dùng bản ORT nạp wasm ngoài (từ /PaddleOCR-Models/ort/) thay vì bản bundle nhúng base64
+    conditions: ['onnxruntime-web-use-extern-wasm', 'module', 'browser', 'import']
   },
   worker: {
     format: 'es'

@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
-import { 
-  Settings, 
-  Shield, 
-  SlidersHorizontal, 
-  Database, 
-  CheckCircle2, 
-  Save, 
-  RefreshCw, 
+import {
+  Settings,
+  Shield,
+  SlidersHorizontal,
+  Database,
+  CheckCircle2,
+  Save,
+  RefreshCw,
   Lock,
   Layers,
   Award,
-  Clock
+  Clock,
+  KeyRound
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -20,14 +21,44 @@ import { DEFAULT_SETTINGS, db } from '../db';
 import { seedDatabaseIfEmpty } from '../services/db-seeder';
 
 export const SettingsPage: React.FC = () => {
-  const { currentRole } = useAuth();
+  const { session, currentRole, systemSettings, refreshPermissions, hasPermission, changePassword } = useAuth();
   const { success, warning, error } = useToast();
   const { confirm } = useModal();
 
-  const [settings, setSettings] = useState<ISystemSettings>(() => {
-    const saved = localStorage.getItem('smarthr_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
-  });
+  const canManageRBAC = hasPermission('MANAGE_ROLES_PERMISSIONS');
+  const canManageSystem = hasPermission('SYSTEM_SETTINGS');
+
+  const [settings, setSettings] = useState<ISystemSettings>(systemSettings);
+
+  // Sync when AuthContext updates (Dexie live)
+  React.useEffect(() => {
+    setSettings(systemSettings);
+  }, [systemSettings]);
+
+  // Đổi mật khẩu tài khoản hiện tại
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+
+  const handleChangePassword = async () => {
+    if (!pwCurrent || !pwNew) {
+      warning('Thiếu thông tin', 'Vui lòng điền mật khẩu hiện tại và mật khẩu mới.');
+      return;
+    }
+    if (pwNew !== pwConfirm) {
+      warning('Mật khẩu không khớp', 'Xác nhận mật khẩu mới không trùng khớp.');
+      return;
+    }
+    const res = await changePassword(pwCurrent, pwNew);
+    if (res.ok) {
+      success('Đã đổi mật khẩu', 'Mật khẩu tài khoản của bạn đã được cập nhật.');
+      setPwCurrent('');
+      setPwNew('');
+      setPwConfirm('');
+    } else {
+      error('Đổi mật khẩu thất bại', res.error || 'Không rõ nguyên nhân');
+    }
+  };
 
   const [activeTab, setActiveTab] = useState<'rbac' | 'diligence' | 'system'>('rbac');
 
@@ -52,9 +83,20 @@ export const SettingsPage: React.FC = () => {
     { id: 'SYSTEM_SETTINGS', label: 'Cấu Hình Hệ Thống & Phân Quyền AD System' }
   ];
 
-  const handleTogglePermission = (role: RoleType, permId: string) => {
-    if (currentRole !== 'AD System') {
-      warning('Quyền hạn bị hạn chế', 'Chỉ tài khoản có vai trò AD System mới được phép chỉnh sửa ma trận phân quyền.');
+  const persistSettings = async (updated: ISystemSettings) => {
+    setSettings(updated);
+    localStorage.setItem('smarthr_settings', JSON.stringify(updated));
+    try {
+      await db.settings.put({ key: 'systemSettings', value: updated });
+      await refreshPermissions();
+    } catch (e) {
+      console.warn('Dexie settings persist failed', e);
+    }
+  };
+
+  const handleTogglePermission = async (role: RoleType, permId: string) => {
+    if (!canManageRBAC) {
+      warning('Quyền hạn bị hạn chế', 'Tài khoản của bạn không có quyền MANAGE_ROLES_PERMISSIONS để chỉnh ma trận phân quyền.');
       return;
     }
 
@@ -68,7 +110,7 @@ export const SettingsPage: React.FC = () => {
       updatedPerms = [...currentPerms, permId];
     }
 
-    const updatedSettings = {
+    const updatedSettings: ISystemSettings = {
       ...settings,
       rolePermissions: {
         ...settings.rolePermissions,
@@ -76,17 +118,20 @@ export const SettingsPage: React.FC = () => {
       }
     };
 
-    setSettings(updatedSettings);
-    localStorage.setItem('smarthr_settings', JSON.stringify(updatedSettings));
-    success('Đã cập nhật phân quyền', `Quyền ${permId} cho vai trò ${role} đã được cập nhật.`);
+    await persistSettings(updatedSettings);
+    success('Đã cập nhật phân quyền (Dexie + localStorage)', `Quyền ${permId} cho vai trò ${role} đã được cập nhật và đồng bộ vào IndexedDB.`);
   };
 
-  const handleSaveDiligenceRules = () => {
-    localStorage.setItem('smarthr_settings', JSON.stringify(settings));
-    success('Đã lưu cấu hình chuyên cần', 'Tỷ lệ giảm trừ tiền chuyên cần đã được áp dụng toàn hệ thống.');
+  const handleSaveDiligenceRules = async () => {
+    await persistSettings(settings);
+    success('Đã lưu cấu hình chuyên cần', 'Tỷ lệ giảm trừ tiền chuyên cần đã được áp dụng toàn hệ thống và đồng bộ Dexie.');
   };
 
   const handleResetDatabase = async () => {
+    if (!canManageSystem) {
+      warning('Không đủ quyền', 'Chỉ tài khoản có quyền SYSTEM_SETTINGS mới được khôi phục dữ liệu.');
+      return;
+    }
     const ok = await confirm({
       title: 'Khôi phục dữ liệu mặc định',
       message: 'Hành động này sẽ xóa toàn bộ dữ liệu hiện tại trong IndexedDB và nạp lại dữ liệu chuẩn từ file KIỂM TRA CHÔT CÔNG THÁNG 08.2026.xlsx. Bạn có chắc chắn không?',
@@ -99,6 +144,7 @@ export const SettingsPage: React.FC = () => {
       await db.delete();
       await db.open();
       await seedDatabaseIfEmpty();
+      await refreshPermissions();
       success('Khôi phục dữ liệu thành công', 'Toàn bộ danh mục nhân viên và bảng chốt công đã được đồng bộ lại.');
     }
   };
@@ -165,10 +211,10 @@ export const SettingsPage: React.FC = () => {
               <h3 className="text-sm font-bold text-slate-900">Phân Quyền Chủ Động Theo 6 Vai Trò Doanh Nghiệp</h3>
               <p className="text-xs text-slate-500 mt-0.5">Bật / Tắt trực tiếp quyền truy cập theo từng module</p>
             </div>
-            {currentRole !== 'AD System' && (
+            {!canManageRBAC && (
               <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 text-[11px] font-bold border border-amber-200 flex items-center gap-1">
                 <Lock className="w-3 h-3 text-amber-600" />
-                Chỉ xem (Cần role AD System để sửa)
+                Chỉ xem (Cần quyền MANAGE_ROLES_PERMISSIONS)
               </span>
             )}
           </div>
@@ -199,7 +245,7 @@ export const SettingsPage: React.FC = () => {
                         <td key={role} className="py-3 px-3 text-center">
                           <button
                             onClick={() => handleTogglePermission(role, perm.id)}
-                            disabled={currentRole !== 'AD System' || (role === 'AD System' && perm.id === 'SYSTEM_SETTINGS')}
+                            disabled={!canManageRBAC || (role === 'AD System' && perm.id === 'SYSTEM_SETTINGS')}
                             className={`w-6 h-6 rounded-lg font-bold inline-flex items-center justify-center transition ${
                               isGranted
                                 ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200'
@@ -323,6 +369,43 @@ export const SettingsPage: React.FC = () => {
             <p className="text-xs text-slate-500 mt-1">
               Toàn bộ dữ liệu được lưu trữ cục bộ tại máy người dùng. Bạn có thể khôi phục lại dữ liệu chuẩn từ file thực tế bất cứ lúc nào.
             </p>
+          </div>
+
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+            <h4 className="font-bold text-xs text-slate-900 uppercase tracking-wider">Đổi mật khẩu tài khoản ({session?.username})</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input
+                type="password"
+                value={pwCurrent}
+                onChange={(e) => setPwCurrent(e.target.value)}
+                placeholder="Mật khẩu hiện tại"
+                aria-label="Mật khẩu hiện tại"
+                className="px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400/50"
+              />
+              <input
+                type="password"
+                value={pwNew}
+                onChange={(e) => setPwNew(e.target.value)}
+                placeholder="Mật khẩu mới (>= 6 ký tự)"
+                aria-label="Mật khẩu mới"
+                className="px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400/50"
+              />
+              <input
+                type="password"
+                value={pwConfirm}
+                onChange={(e) => setPwConfirm(e.target.value)}
+                placeholder="Xác nhận mật khẩu mới"
+                aria-label="Xác nhận mật khẩu mới"
+                className="px-3 py-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-400/50"
+              />
+            </div>
+            <button
+              onClick={handleChangePassword}
+              className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition shadow-sm"
+            >
+              <KeyRound className="w-4 h-4 text-orange-400" />
+              <span>Cập Nhật Mật Khẩu</span>
+            </button>
           </div>
 
           <div className="p-4 bg-rose-50/50 rounded-xl border border-rose-200 space-y-3">

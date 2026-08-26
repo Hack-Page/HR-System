@@ -15,15 +15,17 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { IEmployee, IDailyTimesheetCell, AttendanceStatusCode } from '../types';
 import { computeEmployeeTimesheetSummary } from '../services/formula-engine';
+import { generateCalendarDays } from '../services/calendar-utils';
 import { useToast } from '../context/ToastContext';
 import { useModal } from '../context/ModalContext';
 import { useAuth } from '../context/AuthContext';
 import { exportTimesheetToExcel } from '../services/excel-exporter';
 
 export const TimesheetCalendarPage: React.FC = () => {
-  const { success, error, info } = useToast();
+  const { success, error, info, warning } = useToast();
   const { openCustomModal, closeCustomModal } = useModal();
-  const { departmentScope, hasPermission } = useAuth();
+  const { departmentScope, hasPermission, systemSettings } = useAuth();
+  const [cycleMode, setCycleMode] = useState<'SEASONAL' | 'OFFICIAL'>('SEASONAL');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
@@ -66,33 +68,17 @@ export const TimesheetCalendarPage: React.FC = () => {
     return map;
   }, [timesheets]);
 
-  // Calendar 31-day dates definition (Official cycle: 21/07 to 20/08)
+  // Dynamic Calendar generation - hỗ trợ cả 21-20 (OFFICIAL) và 1-31 (SEASONAL)
   const calendarDays = useMemo(() => {
-    const days = [];
-    const daysOfWeekEn = ['Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
-    const daysOfWeekVi = ['T3', 'T4', 'T5', 'T6', 'T7', 'CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN', 'T2', 'T3', 'T4', 'T5'];
+    return generateCalendarDays(selectedMonth, selectedYear, cycleMode);
+  }, [selectedMonth, selectedYear, cycleMode]);
 
-    for (let i = 1; i <= 31; i++) {
-      const dateNum = i <= 11 ? 20 + i : i - 11;
-      const monthNum = i <= 11 ? (selectedMonth === 1 ? 12 : selectedMonth - 1) : selectedMonth;
-      const dateStr = `${selectedYear}-${String(monthNum).padStart(2, '0')}-${String(dateNum).padStart(2, '0')}`;
-      
-      days.push({
-        dayIndex: i,
-        dayNum: dateNum,
-        monthNum,
-        dateStr,
-        dayEn: daysOfWeekEn[i - 1] || '',
-        dayVi: daysOfWeekVi[i - 1] || '',
-        isSunday: daysOfWeekVi[i - 1] === 'CN',
-        isSaturday: daysOfWeekVi[i - 1] === 'T7'
-      });
-    }
-    return days;
-  }, [selectedMonth, selectedYear]);
-
-  // Handle cell click to edit
+  // Handle cell click to edit (yêu cầu quyền MANAGE_TIMESHEET)
   const handleCellClick = (emp: IEmployee, day: typeof calendarDays[0]) => {
+    if (!hasPermission('MANAGE_TIMESHEET')) {
+      warning?.('Không đủ quyền', 'Bạn không có quyền chỉnh sửa bảng chấm công (MANAGE_TIMESHEET).');
+      return;
+    }
     const key = `${emp.employeeId}_${day.dateStr}`;
     const cell = timesheetMap.get(key) || {
       employeeId_date: key,
@@ -108,7 +94,7 @@ export const TimesheetCalendarPage: React.FC = () => {
     setActiveEditCell({
       employee: emp,
       cell: { ...cell },
-      dateLabel: `${day.dayVi}, ${day.dayNum}/${day.monthNum}/${selectedYear}`
+      dateLabel: `${day.dayVi}, ${day.dayNum}/${day.monthNum}/${day.yearNum}`
     });
   };
 
@@ -125,8 +111,8 @@ export const TimesheetCalendarPage: React.FC = () => {
   };
 
   const handleExport = async () => {
-    await exportTimesheetToExcel(filteredEmployees, timesheets, overtimes, selectedMonth, selectedYear);
-    success('Xuất file chốt công thành công!');
+    await exportTimesheetToExcel(filteredEmployees, timesheets, overtimes, selectedMonth, selectedYear, cycleMode);
+    success(`Xuất file chốt công thành công! (Chu kỳ ${cycleMode === 'OFFICIAL' ? '21-20 Chính thức' : '1-31 Thời vụ'})`);
   };
 
   return (
@@ -144,13 +130,15 @@ export const TimesheetCalendarPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow-md shadow-emerald-200"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Xuất Bảng Chốt Công Excel</span>
-          </button>
+          {hasPermission('MANAGE_TIMESHEET') && (
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition shadow-md shadow-emerald-200"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              <span>Xuất Bảng Chốt Công Excel</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -178,6 +166,16 @@ export const TimesheetCalendarPage: React.FC = () => {
             {departments.map(d => (
               <option key={d} value={d}>{d}</option>
             ))}
+          </select>
+
+          <select
+            value={cycleMode}
+            onChange={(e) => setCycleMode(e.target.value as any)}
+            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:border-orange-500"
+            title="Chu kỳ tính công"
+          >
+            <option value="SEASONAL">Thời vụ 1-31</option>
+            <option value="OFFICIAL">Chính thức 21-20</option>
           </select>
         </div>
 
@@ -243,7 +241,8 @@ export const TimesheetCalendarPage: React.FC = () => {
                   if (c) empCells.push(c);
                 });
 
-                const summary = computeEmployeeTimesheetSummary(emp, empCells);
+                const deptRule = systemSettings.diligenceDeductionRules.find(r => r.department === emp.department) || systemSettings.diligenceDeductionRules.find(r => r.department === 'ALL') || systemSettings.diligenceDeductionRules[0];
+                const summary = computeEmployeeTimesheetSummary(emp, empCells, deptRule ? { twoDaysULPenaltyPct: deptRule.twoDaysULPenaltyPct, threeDaysULPenaltyPct: deptRule.threeDaysULPenaltyPct } : undefined);
 
                 return (
                   <tr key={emp.employeeId} className="hover:bg-orange-50/30 transition group">

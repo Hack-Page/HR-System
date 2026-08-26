@@ -55,8 +55,12 @@ export const ShiftRosterPage: React.FC = () => {
     return shiftRosters.filter(s => s.isRestViolation).length;
   }, [shiftRosters]);
 
-  // Adjust shift action to fix violation
+  // Adjust shift action to fix violation (yêu cầu quyền MANAGE_ROSTER)
   const handleFixViolation = async (roster: IShiftRosterEntry, newShift: ShiftClassType) => {
+    if (!hasPermission('MANAGE_ROSTER')) {
+      error('Không đủ quyền', 'Bạn không có quyền điều chỉnh phân ca (MANAGE_ROSTER).');
+      return;
+    }
     let startTime = '06:00';
     let endTime = '14:00';
     let isViolating = false;

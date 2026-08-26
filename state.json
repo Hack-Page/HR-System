@@ -2,10 +2,10 @@
   "project_metadata": {
     "project_name": "SmartHR - Single-File In-Browser HRMS & Timekeeping System",
     "organization": "Leggett & Platt / SmartHR",
-    "architecture": "Single-File In-Browser Backend (React + TypeScript + Web Worker + Dexie.js + ONNX Runtime Web)",
-    "last_updated": "2026-08-24T16:35:00Z",
-    "current_phase": "Phase 7: Full System Integrated, Verified & Built",
-    "version": "1.0.0-production-ready"
+    "architecture": "Single-File In-Browser Backend (React + TypeScript + Web Worker + Dexie.js + ONNX Runtime Web Hybrid CDN)",
+    "last_updated": "2026-08-26T01:50:00Z",
+    "current_phase": "Phase 8: Architecture Review Fixes Applied (FORMULA_DEFS single source, dynamic calendar 21-20/1-31, worker pool 3/3, hybrid OCR REAL_ONNX+fallback, dynamic RBAC from Dexie, Vitest 32 tests green)",
+    "version": "1.1.0"
   },
   "agent_profile": {
     "role": "Senior Principal System Designer & Staff IT Software Engineer",
@@ -36,6 +36,21 @@
     }
   },
   "modules_status": {
+    "M0_Architecture_Fixes_2026_08_26": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": [
+        "FORMULA_DEFS single source (formula-defs.ts) đồng bộ JS engine + Excel COUNTIF, hết drift",
+        "Dynamic calendar headers theo month/year (calendar-utils.ts), hỗ trợ cả chu kỳ SEASONAL 1-31 và OFFICIAL 21-20 (UI + Excel export)",
+        "Web Worker pool đủ 3/3 theo Plan.md: timesheet-parser + formula-engine.worker + onnx-ocr.worker",
+        "Hybrid ONNX: model check HEAD request thật + ORT runtime load từ CDN runtime-side (không bundle, giữ index.html ~2MB), fallback preset minh bạch REAL_ONNX/SIMULATION_FALLBACK",
+        "RBAC dynamic: hasPermission đọc rolePermissions từ Dexie settings (persist qua SettingsPage), không còn hard-code",
+        "Diligence rules per-department được áp dụng thật trong TimesheetCalendarPage",
+        "Dashboard bỏ fake fallback numbers (||102, ||21...)",
+        "Sidebar gộp 3 useLiveQuery thành 1",
+        "Vitest 32 tests pass (formula-engine, ocr-table-engine normalizers, calendar-utils)"
+      ]
+    },
     "M1_Dashboard_Analytics": {
       "status": "COMPLETED",
       "completion_pct": 100,

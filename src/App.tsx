@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ToastProvider } from './context/ToastContext';
 import { ModalProvider } from './context/ModalContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { Layout } from './components/layout/Layout';
+import { LoginScreen } from './components/auth/LoginScreen';
 import { NavPageId } from './components/layout/Sidebar';
 import { seedDatabaseIfEmpty } from './services/db-seeder';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -18,13 +19,18 @@ import { ShiftRosterPage } from './pages/ShiftRosterPage';
 import { OCRVerificationPage } from './pages/OCRVerificationPage';
 import { SettingsPage } from './pages/SettingsPage';
 
-export const AppContent: React.FC = () => {
+const Shell: React.FC = () => {
+  const { session } = useAuth();
   const [activePage, setActivePage] = useState<NavPageId>('dashboard');
 
   useEffect(() => {
     // Seed initial data on startup if database is empty
     seedDatabaseIfEmpty().catch(console.error);
   }, []);
+
+  if (!session) {
+    return <LoginScreen />;
+  }
 
   return (
     <Layout activePage={activePage} onSelectPage={setActivePage}>
@@ -47,7 +53,7 @@ export const App: React.FC = () => {
         <LanguageProvider>
           <ToastProvider>
             <ModalProvider>
-              <AppContent />
+              <Shell />
             </ModalProvider>
           </ToastProvider>
         </LanguageProvider>

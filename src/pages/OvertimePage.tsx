@@ -24,7 +24,7 @@ interface OvertimePageProps {
 }
 
 export const OvertimePage: React.FC<OvertimePageProps> = ({ onNavigate }) => {
-  const { success, warning } = useToast();
+  const { success, warning, error } = useToast();
   const { confirm } = useModal();
   const { departmentScope, hasPermission } = useAuth();
 
@@ -106,11 +106,15 @@ export const OvertimePage: React.FC<OvertimePageProps> = ({ onNavigate }) => {
     };
   }, [overtimes]);
 
-  // Manual verify OT toggle
+  // Manual verify OT toggle (yêu cầu quyền MANAGE_OT)
   const handleToggleStatus = async (record: IOvertimeRecord) => {
-    const nextStatus: OvertimeVerificationStatus = 
+    if (!hasPermission('MANAGE_OT')) {
+      warning('Không đủ quyền', 'Bạn không có quyền thay đổi trạng thái xác nhận tăng ca (MANAGE_OT).');
+      return;
+    }
+    const nextStatus: OvertimeVerificationStatus =
       record.verificationStatus === 'PENDING' ? 'MATCHED' : (record.verificationStatus === 'MATCHED' ? 'MISMATCH' : 'PENDING');
-    
+
     await db.overtimeRecords.put({
       ...record,
       verificationStatus: nextStatus,

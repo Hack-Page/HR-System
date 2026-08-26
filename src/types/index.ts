@@ -1,10 +1,29 @@
-export type RoleType = 
-  | 'HR Manager' 
-  | 'HR Admin' 
-  | 'Warehouse Admin' 
-  | 'Production Admin' 
-  | 'QC Admin' 
+export type RoleType =
+  | 'HR Manager'
+  | 'HR Admin'
+  | 'Warehouse Admin'
+  | 'Production Admin'
+  | 'QC Admin'
   | 'AD System';
+
+/** Tài khoản đăng nhập cục bộ (hash SHA-256 + salt, lưu IndexedDB) */
+export interface IAccount {
+  username: string;          // khóa chính
+  displayName: string;
+  role: RoleType;
+  salt: string;              // hex 16 bytes
+  passwordHash: string;      // hex SHA-256(salt || password)
+  active: boolean;
+  createdAt: string;
+  lastLoginAt?: string;
+}
+
+/** Phiên đăng nhập hiện hành */
+export interface SessionUser {
+  username: string;
+  displayName: string;
+  role: RoleType;
+}
 
 export type LanguageType = 'vi' | 'en';
 

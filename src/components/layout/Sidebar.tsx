@@ -21,6 +21,7 @@ import {
   FileText
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../../db';
 
@@ -41,21 +42,22 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activePage, onSelectPage }) => {
   const { t } = useLanguage();
+  const { session, currentRole } = useAuth();
   const [dashboardOpen, setDashboardOpen] = useState(true);
   const [appsOpen, setAppsOpen] = useState(true);
 
-  // Dynamic live badges from Dexie
-  const pendingLeaveCount = useLiveQuery(async () => {
-    return await db.leaveRequests.where('status').equals('PENDING').count();
-  }, []) || 0;
-
-  const shiftViolationCount = useLiveQuery(async () => {
-    return await db.shiftRosters.filter(item => Boolean(item.isRestViolation)).count();
-  }, []) || 0;
-
-  const pendingOTCount = useLiveQuery(async () => {
-    return await db.overtimeRecords.where('verificationStatus').equals('PENDING').count();
-  }, []) || 0;
+  // Combined live badges query - gộp 3 query thành 1 để giảm IndexedDB reads
+  const badgeCounts = useLiveQuery(async () => {
+    const [pendingLeave, violations, pendingOT] = await Promise.all([
+      db.leaveRequests.where('status').equals('PENDING').count(),
+      db.shiftRosters.filter(item => Boolean(item.isRestViolation)).count(),
+      db.overtimeRecords.where('verificationStatus').equals('PENDING').count(),
+    ]);
+    return { pendingLeave, violations, pendingOT };
+  }, []);
+  const pendingLeaveCount = badgeCounts?.pendingLeave ?? 0;
+  const shiftViolationCount = badgeCounts?.violations ?? 0;
+  const pendingOTCount = badgeCounts?.pendingOT ?? 0;
 
   return (
     <aside className="w-64 bg-white text-slate-600 flex flex-col shrink-0 border-r border-slate-200 select-none overflow-y-auto font-sans">
@@ -273,11 +275,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onSelectPage }) =>
       <div className="p-4 border-t border-slate-100 bg-slate-50/50">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-400 to-amber-400 flex items-center justify-center text-white font-bold text-xs shadow-inner">
-            A
+            {(session?.displayName ?? '?').charAt(0).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-bold text-xs text-slate-900 truncate">Adrian (HR Manager)</div>
-            <div className="text-[10px] text-slate-400 truncate">adrian@leggett.com</div>
+            <div className="font-bold text-xs text-slate-900 truncate">{session?.displayName ?? 'Chưa đăng nhập'}</div>
+            <div className="text-[10px] text-slate-400 truncate">{currentRole ?? ''}</div>
           </div>
         </div>
       </div>

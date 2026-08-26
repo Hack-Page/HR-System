@@ -1,4 +1,5 @@
 import { IEmployee, IDailyTimesheetCell } from '../types';
+import { FORMULA_DEFS, buildCountBag } from './formula-defs';
 
 export interface ITimesheetSummary {
   standardWD: number;
@@ -31,36 +32,14 @@ export function computeEmployeeTimesheetSummary(
     standardWD = 27;
   }
 
-  let countW = 0;
-  let countN = 0;
-  let countBT = 0;
-  let countW_AL = 0;
-  let countW_UL = 0;
-  let countAL = 0;
-  let countUL = 0;
-  let countAL_UL = 0;
-  let countPH = 0;
-  let countSL = 0;
-  let countPL = 0;
+  const bag = buildCountBag(cells);
+
   let lateEarlyMins = 0;
   let lateEarlyCnt = 0;
   let missingPunchCnt = 0;
 
   for (const cell of cells) {
     const code = cell.statusCode?.trim() || '';
-
-    if (code === 'W') countW++;
-    else if (code === 'N') countN++;
-    else if (code === 'BT') countBT++;
-    else if (code === 'W/2 AL/2') countW_AL++;
-    else if (code === 'W/2 UL/2') countW_UL++;
-    else if (code === 'AL') countAL++;
-    else if (code === 'UL' || code === 'Off') countUL++;
-    else if (code === 'AL/2 UL/2') countAL_UL++;
-    else if (code === 'PH') countPH++;
-    else if (code === 'SL') countSL++;
-    else if (code === 'PL') countPL++;
-
     if (cell.lateMinutes && cell.lateMinutes > 0) {
       lateEarlyMins += cell.lateMinutes;
       lateEarlyCnt++;
@@ -74,20 +53,14 @@ export function computeEmployeeTimesheetSummary(
     }
   }
 
-  // Formula chốt công:
-  // Total WD = COUNTIF("W") + COUNTIF("W/2 AL/2")*0.5 + COUNTIF("BT") + COUNTIF("N") + COUNTIF("W/2 UL/2")*0.5
-  const actualWD = countW + (countW_AL * 0.5) + countBT + countN + (countW_UL * 0.5);
-
-  // Total AL = COUNTIF("AL") + COUNTIF("W/2 AL/2")*0.5 + COUNTIF("AL/2 UL/2")*0.5
-  const annualLeaveAL = countAL + (countW_AL * 0.5) + (countAL_UL * 0.5);
-
-  // Total UL = COUNTIF("UL") + COUNTIF("W/2 UL/2")*0.5 + COUNTIF("AL/2 UL/2")*0.5
-  const unpaidLeaveUL = countUL + (countW_UL * 0.5) + (countAL_UL * 0.5);
-
-  const publicHolidayPH = countPH;
-  const sickLeaveSL = countSL;
-  const specialPaidLeavePL = countPL;
-  const nightShiftsCount = countN;
+  // Single source of truth via FORMULA_DEFS
+  const actualWD = FORMULA_DEFS.actualWD.jsCompute(bag);
+  const annualLeaveAL = FORMULA_DEFS.annualLeaveAL.jsCompute(bag);
+  const unpaidLeaveUL = FORMULA_DEFS.unpaidLeaveUL.jsCompute(bag);
+  const publicHolidayPH = FORMULA_DEFS.publicHolidayPH.jsCompute(bag);
+  const sickLeaveSL = FORMULA_DEFS.sickLeaveSL.jsCompute(bag);
+  const specialPaidLeavePL = FORMULA_DEFS.specialPaidLeavePL.jsCompute(bag);
+  const nightShiftsCount = FORMULA_DEFS.nightShiftsCount.jsCompute(bag);
 
   // Calculate Diligence Bonus with UL deductions
   // Ground truth formula from sheet Thai san:

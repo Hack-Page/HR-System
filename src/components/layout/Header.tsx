@@ -1,47 +1,43 @@
-import React, { useRef, useState } from 'react';
-import { 
-  Upload, 
-  Download, 
-  Globe, 
-  Shield, 
-  Search, 
-  CheckCircle2, 
-  Loader2, 
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Upload,
+  Download,
+  Globe,
+  Search,
+  CheckCircle2,
+  Loader2,
   FileSpreadsheet,
-  Building2,
   ChevronDown,
   Cloud,
-  FolderSync
+  LogOut,
+  UserCircle2
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useToast } from '../../context/ToastContext';
 import { useModal } from '../../context/ModalContext';
-import { RoleType } from '../../types';
 import { exportTimesheetToExcel } from '../../services/excel-exporter';
 import { exportDatabaseToSnapshot, importDatabaseFromSnapshot } from '../../services/db-sync';
 import { db } from '../../db';
 
 export const Header: React.FC = () => {
-  const { currentRole, setCurrentRole, hasPermission } = useAuth();
+  const { session, currentRole, hasPermission, logout, refreshPermissions } = useAuth();
   const { language, toggleLanguage, t } = useLanguage();
   const { success, error, warning, info } = useToast();
-  const { alertModal } = useModal();
+  const { alertModal, confirm } = useModal();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const workerRef = useRef<Worker | null>(null);
 
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importStatusText, setImportStatusText] = useState('');
-  const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
 
-  const roles: RoleType[] = [
-    'HR Manager',
-    'HR Admin',
-    'Warehouse Admin',
-    'Production Admin',
-    'QC Admin',
-    'AD System'
-  ];
+  // Huỷ import worker khi rời trang để tránh leak + setState trên unmounted
+  useEffect(() => () => {
+    workerRef.current?.terminate();
+    workerRef.current = null;
+  }, []);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -60,12 +56,15 @@ export const Header: React.FC = () => {
       const buffer = await file.arrayBuffer();
 
       // Launch Timesheet Parser Web Worker
+      const now = new Date();
       const worker = new Worker(
         new URL('../../workers/timesheet-parser.worker.ts', import.meta.url),
         { type: 'module' }
       );
+      workerRef.current = worker;
 
-      worker.postMessage({ buffer, month: 8, year: 2026 });
+      // Dữ liệu nạp vào kỳ hiện tại thay vì tháng cứng
+      worker.postMessage({ buffer, month: now.getMonth() + 1, year: now.getFullYear() });
 
       worker.onmessage = async (event) => {
         const msg = event.data;
@@ -74,7 +73,7 @@ export const Header: React.FC = () => {
           setImportStatusText(msg.message);
         } else if (msg.type === 'COMPLETE') {
           setImportStatusText('Đang lưu vào cơ sở dữ liệu Dexie.js (IndexedDB)...');
-          
+
           // Bulk put to Dexie.js
           if (msg.timesheets && msg.timesheets.length > 0) {
             await db.dailyTimesheets.bulkPut(msg.timesheets);
@@ -93,10 +92,12 @@ export const Header: React.FC = () => {
             `Đã phân tích ${msg.rawLogsCount.toLocaleString()} dòng quẹt thẻ và cập nhật ${msg.timesheetCellsCount.toLocaleString()} ô công.`
           );
           worker.terminate();
+          workerRef.current = null;
         } else if (msg.type === 'ERROR') {
           setIsImporting(false);
           error('Lỗi khi xử lý file', msg.error);
           worker.terminate();
+          workerRef.current = null;
         }
       };
 
@@ -104,6 +105,7 @@ export const Header: React.FC = () => {
         setIsImporting(false);
         error('Lỗi Web Worker', err.message);
         worker.terminate();
+        workerRef.current = null;
       };
 
     } catch (err: any) {
@@ -179,15 +181,17 @@ export const Header: React.FC = () => {
           </button>
         )}
 
-        {/* Export Button */}
-        <button
-          onClick={handleExportExcel}
-          className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition shadow-sm shadow-emerald-200"
-          title="Xuất bảng chốt công chuẩn theo mẫu KIỂM TRA CHÔT CÔNG THÁNG 08.2026.xlsx"
-        >
-          <FileSpreadsheet className="w-4 h-4" />
-          <span className="hidden lg:inline">{t('exportExcel')}</span>
-        </button>
+        {/* Export Button (yêu cầu quyền quản lý chấm công) */}
+        {hasPermission('MANAGE_TIMESHEET') && (
+          <button
+            onClick={handleExportExcel}
+            className="flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition shadow-sm shadow-emerald-200"
+            title="Xuất bảng chốt công chuẩn theo mẫu KIỂM TRA CHÔT CÔNG THÁNG 08.2026.xlsx"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span className="hidden lg:inline">{t('exportExcel')}</span>
+          </button>
+        )}
 
         {/* OneDrive Shared Sync Button */}
         <button
@@ -209,7 +213,7 @@ export const Header: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                     <button
                       onClick={async () => {
-                        await exportDatabaseToSnapshot(currentRole);
+                        await exportDatabaseToSnapshot(session?.username ?? 'unknown');
                         success('Đã xuất bản ghi Snapshot', 'Lưu file JSON này vào thư mục OneDrive dùng chung.');
                       }}
                       className="p-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl flex flex-col items-center justify-center gap-2 transition"
@@ -225,17 +229,34 @@ export const Header: React.FC = () => {
                         type="file"
                         accept=".json"
                         className="hidden"
-                        onChange={async (e) => {
+                          onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
+                          const ok = await confirm({
+                            title: 'Nạp dữ liệu đè lên hiện tại?',
+                            message: `Toàn bộ dữ liệu nhân viên/chấm công/tăng ca trên máy này sẽ bị THAY THẾ bằng nội dung file "${file.name}". Hành động không thể hoàn tác.`,
+                            confirmText: 'Thay thế dữ liệu',
+                            cancelText: 'Huỷ',
+                            type: 'warning'
+                          });
+                          if (!ok) {
+                            e.target.value = '';
+                            return;
+                          }
                           try {
                             const res = await importDatabaseFromSnapshot(file);
+                            await refreshPermissions();
                             success(
                               'Đồng bộ OneDrive thành công!',
-                              `Đã nạp ${res.employeesCount} nhân viên, ${res.timesheetsCount} ô công từ bản ghi của ${res.exportedBy} (${new Date(res.exportedAt).toLocaleTimeString('vi-VN')}).`
+                              `Đã nạp ${res.employeesCount} nhân viên, ${res.timesheetsCount} ô công${res.skippedTotal > 0 ? `, bỏ qua ${res.skippedTotal} dòng lỗi` : ''}${res.settingsRestored ? ' và khôi phục cấu hình' : ''}.`
                             );
+                            if (res.skippedTotal > 0) {
+                              warning('Có dòng dữ liệu không hợp lệ', `${res.skippedTotal} dòng bị bỏ qua do thiếu khoá hoặc sai cấu trúc.`);
+                            }
                           } catch (err: any) {
                             error('Lỗi nạp file đồng bộ', err.message);
+                          } finally {
+                            e.target.value = '';
                           }
                         }}
                       />
@@ -262,38 +283,39 @@ export const Header: React.FC = () => {
           <span className="uppercase">{language}</span>
         </button>
 
-        {/* Role Switcher */}
+        {/* User Menu (thay cho role-switcher: vai trò đến từ tài khoản đăng nhập) */}
         <div className="relative">
           <button
-            onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+            onClick={() => setIsUserDropdownOpen(v => !v)}
+            aria-haspopup="menu"
+            aria-expanded={isUserDropdownOpen}
             className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-medium rounded-xl transition shadow-sm"
           >
-            <Shield className="w-3.5 h-3.5 text-orange-400" />
-            <span>{currentRole}</span>
+            <UserCircle2 className="w-4 h-4 text-orange-400" />
+            <span>{session?.displayName ?? 'Chưa đăng nhập'}</span>
             <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
           </button>
 
-          {isRoleDropdownOpen && (
-            <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95">
+          {isUserDropdownOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 py-1.5 z-50 animate-in fade-in zoom-in-95"
+            >
               <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                {t('role')} (RBAC Access)
+                {session?.username} · {currentRole}
               </div>
-              {roles.map((r) => (
-                <button
-                  key={r}
-                  onClick={() => {
-                    setCurrentRole(r);
-                    setIsRoleDropdownOpen(false);
-                    info(`Đã chuyển sang vai trò: ${r}`);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-slate-50 transition ${
-                    currentRole === r ? 'text-orange-600 font-bold bg-orange-50/50' : 'text-slate-700'
-                  }`}
-                >
-                  <span>{r}</span>
-                  {currentRole === r && <CheckCircle2 className="w-3.5 h-3.5 text-orange-500" />}
-                </button>
-              ))}
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setIsUserDropdownOpen(false);
+                  logout();
+                  info('Đã đăng xuất', 'Hẹn gặp lại!');
+                }}
+                className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 text-rose-600 hover:bg-rose-50 transition font-semibold"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Đăng xuất</span>
+              </button>
             </div>
           )}
         </div>

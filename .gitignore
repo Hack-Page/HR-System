@@ -2,4 +2,5 @@ node_modules/
 extracted_figma/
 *.log
 .DS_Store
-*.tmp
+*.tmpPaddleOCR-Models/paddle_inference/
+shortcuts/

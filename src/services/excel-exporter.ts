@@ -1,15 +1,20 @@
-import ExcelJS from 'exceljs';
 import { IEmployee, IDailyTimesheetCell, IOvertimeRecord } from '../types';
 import { computeEmployeeTimesheetSummary } from './formula-engine';
+import { FORMULA_DEFS } from './formula-defs';
+import { generateCalendarDays } from './calendar-utils';
 
 export async function exportTimesheetToExcel(
   employees: IEmployee[],
   timesheets: IDailyTimesheetCell[],
   overtimes: IOvertimeRecord[],
   month: number = 8,
-  year: number = 2026
+  year: number = 2026,
+  cycle: 'SEASONAL' | 'OFFICIAL' = 'SEASONAL'
 ) {
-  const workbook = new ExcelJS.Workbook();
+  // Lazy-load ExcelJS to reduce initial bundle
+  const mod: any = await import('exceljs');
+  const ExcelJSNS = mod.default ?? mod;
+  const workbook = new ExcelJSNS.Workbook();
   workbook.creator = 'SmartHR Leggett & Platt';
   workbook.created = new Date();
 
@@ -44,9 +49,8 @@ export async function exportTimesheetToExcel(
   titleCell.font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FF002D62' } };
   titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-  // Headers (Row 5, 6, 7)
-  const daysHeaderEn = ['Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu'];
-  const daysHeaderVi = ['T3', 'T4', 'T5', 'T6', 'T7', 'CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN', 'T2', 'T3', 'T4', 'T5'];
+  // Dynamic calendar generation (replaces hard-coded headers)
+  const calendarDays = generateCalendarDays(month, year, cycle);
 
   const fixedCols = [
     { header: 'No./\nSTT', key: 'stt', width: 6 },
@@ -70,38 +74,36 @@ export async function exportTimesheetToExcel(
     ws.getColumn(idx + 1).width = col.width;
   });
 
-  // Calendar 31 days (Columns 9 to 39)
-  for (let i = 1; i <= 31; i++) {
-    const colIdx = 8 + i;
-    const dateNum = i <= 11 ? 20 + i : i - 11;
-    const monthNum = i <= 11 ? (month === 1 ? 12 : month - 1) : month;
-    
-    // Row 5: Date number
+  // Calendar 31 days (Columns 9 to 39) - Dynamic by month/year
+  calendarDays.forEach((day) => {
+    const colIdx = 8 + day.dayIndex;
+
+    // Row 5: Date number DD/MM
     const cell5 = ws.getCell(5, colIdx);
-    cell5.value = `${dateNum}/${monthNum}`;
+    cell5.value = `${day.dayNum}/${day.monthNum}`;
     cell5.font = { name: 'Arial', size: 9, bold: true };
     cell5.alignment = { horizontal: 'center', vertical: 'middle' };
     cell5.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
 
-    // Row 6: Day EN
+    // Row 6: Day EN (Mon, Tue...)
     const cell6 = ws.getCell(6, colIdx);
-    cell6.value = daysHeaderEn[i - 1] || '';
+    cell6.value = day.dayEn;
     cell6.font = { name: 'Arial', size: 8 };
     cell6.alignment = { horizontal: 'center', vertical: 'middle' };
 
-    // Row 7: Day VI
+    // Row 7: Day VI (T2, T3... CN)
     const cell7 = ws.getCell(7, colIdx);
-    cell7.value = daysHeaderVi[i - 1] || '';
+    cell7.value = day.dayVi;
     cell7.font = { name: 'Arial', size: 8, bold: true };
     cell7.alignment = { horizontal: 'center', vertical: 'middle' };
 
-    if (daysHeaderVi[i - 1] === 'CN') {
+    if (day.isSunday) {
       cell5.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFED7AA' } };
       cell6.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFED7AA' } };
       cell7.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFED7AA' } };
     }
     ws.getColumn(colIdx).width = 5.5;
-  }
+  });
 
   // Summary Formula Headers (Columns 40 to 58)
   const summaryHeaders = [
@@ -156,12 +158,10 @@ export async function exportTimesheetToExcel(
     ws.getCell(r, 7).value = emp.startDate;
     ws.getCell(r, 8).value = `${emp.employeeId}_${month}`;
 
-    // 31 Calendar cells
-    for (let dayIdx = 1; dayIdx <= 31; dayIdx++) {
-      const colIdx = 8 + dayIdx;
-      const dateNum = dayIdx <= 11 ? 20 + dayIdx : dayIdx - 11;
-      const monthNum = dayIdx <= 11 ? (month === 1 ? 12 : month - 1) : month;
-      const dateStr = `${year}-${String(monthNum).padStart(2, '0')}-${String(dateNum).padStart(2, '0')}`;
+    // 31 Calendar cells - use dynamic calendarDays
+    for (const day of calendarDays) {
+      const colIdx = 8 + day.dayIndex;
+      const dateStr = day.dateStr;
       
       const key = `${emp.employeeId}_${dateStr}`;
       const cellData = timesheetCellMap.get(key);
@@ -180,22 +180,28 @@ export async function exportTimesheetToExcel(
       } else if (val === 'Off') {
         cell.font = { color: { argb: 'FF991B1B' }, bold: true };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+      } else if (val === 'AL') {
+        cell.font = { color: { argb: 'FF1E40AF' }, bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } };
+      } else if (val === 'UL') {
+        cell.font = { color: { argb: 'FF475569' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
       }
 
       if (cellData) empCells.push(cellData);
     }
 
-    // Formulas & summary columns
+    // Formulas & summary columns - Single Source via FORMULA_DEFS
     const summary = computeEmployeeTimesheetSummary(emp, empCells);
     ws.getCell(r, 40).value = summary.standardWD;
     
-    // Excel formulas
-    ws.getCell(r, 41).value = { formula: `COUNTIF(I${r}:AM${r},"W")+COUNTIF(I${r}:AM${r},"W/2 AL/2")*0.5+COUNTIF(I${r}:AM${r},"BT")+COUNTIF(I${r}:AM${r},"N")+COUNTIF(I${r}:AM${r},"W/2 UL/2")*0.5`, result: summary.actualWD };
-    ws.getCell(r, 42).value = { formula: `COUNTIF(I${r}:AM${r},"AL")+COUNTIF(I${r}:AM${r},"W/2 AL/2")*0.5+COUNTIF(I${r}:AM${r},"AL/2 UL/2")*0.5`, result: summary.annualLeaveAL };
-    ws.getCell(r, 43).value = { formula: `COUNTIF(I${r}:AM${r},"UL")+COUNTIF(I${r}:AM${r},"W/2 UL/2")*0.5+COUNTIF(I${r}:AM${r},"AL/2 UL/2")*0.5`, result: summary.unpaidLeaveUL };
-    ws.getCell(r, 44).value = { formula: `COUNTIF(I${r}:AM${r},"PH")`, result: summary.publicHolidayPH };
-    ws.getCell(r, 45).value = { formula: `COUNTIF(I${r}:AM${r},"SL")`, result: summary.sickLeaveSL };
-    ws.getCell(r, 46).value = { formula: `COUNTIF(I${r}:AM${r},"PL")`, result: summary.specialPaidLeavePL };
+    // Excel formulas from central defs
+    ws.getCell(r, 41).value = { formula: FORMULA_DEFS.actualWD.excelFormula(r).formula, result: summary.actualWD };
+    ws.getCell(r, 42).value = { formula: FORMULA_DEFS.annualLeaveAL.excelFormula(r).formula, result: summary.annualLeaveAL };
+    ws.getCell(r, 43).value = { formula: FORMULA_DEFS.unpaidLeaveUL.excelFormula(r).formula, result: summary.unpaidLeaveUL };
+    ws.getCell(r, 44).value = { formula: FORMULA_DEFS.publicHolidayPH.excelFormula(r).formula, result: summary.publicHolidayPH };
+    ws.getCell(r, 45).value = { formula: FORMULA_DEFS.sickLeaveSL.excelFormula(r).formula, result: summary.sickLeaveSL };
+    ws.getCell(r, 46).value = { formula: FORMULA_DEFS.specialPaidLeavePL.excelFormula(r).formula, result: summary.specialPaidLeavePL };
     ws.getCell(r, 47).value = summary.nightShiftsCount;
     ws.getCell(r, 48).value = summary.lateEarlyMinutes > 0 ? summary.lateEarlyMinutes : '';
     ws.getCell(r, 49).value = summary.productivityBonus || '';

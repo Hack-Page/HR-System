@@ -7,7 +7,8 @@ import {
   ILeaveRequest,
   IShiftRosterEntry,
   IOCREntry,
-  ISystemSettings
+  ISystemSettings,
+  IAccount
 } from '../types';
 
 export class HRSystemDatabase extends Dexie {
@@ -19,10 +20,11 @@ export class HRSystemDatabase extends Dexie {
   shiftRosters!: Table<IShiftRosterEntry, string>;
   ocrScans!: Table<IOCREntry, string>;
   settings!: Table<{ key: string; value: any }, string>;
+  accounts!: Table<IAccount, string>;
 
   constructor() {
     super('HRSystem_LeggettPlatt_DB');
-    
+
     this.version(2).stores({
       employees: 'employeeId, erpId, fullName, department, shiftClassId, contractType, status',
       rawAttendanceLogs: '++id, employeeId, date, [employeeId+date], departmentCode',
@@ -32,6 +34,11 @@ export class HRSystemDatabase extends Dexie {
       shiftRosters: 'employeeId_date, employeeId, date, shiftCode',
       ocrScans: 'id, extractedEmployeeId, extractedDate, matchStatus, scanTimestamp',
       settings: 'key'
+    });
+
+    // v3: bảng tài khoản đăng nhập cục bộ
+    this.version(3).stores({
+      accounts: 'username, role'
     });
   }
 }

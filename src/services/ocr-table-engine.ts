@@ -1,5 +1,11 @@
-import { db } from '../db';
+/**
+ * OCR Table Engine - chuẩn hoá dữ liệu nhận dạng được từ pipeline ONNX thật
+ *
+ * Nguyên tắc: KHÔNG bịa giá trị mặc định. Nếu không parse được thì trả về
+ * valid=false / hours=null và để người dùng sửa trên bảng preview.
+ */
 import { IEmployee } from '../types';
+import type { OcrTableGrid } from '../types/ocr-worker-protocol';
 
 export interface IOCRBbox {
   x: number;
@@ -10,68 +16,48 @@ export interface IOCRBbox {
   confidence: number;
 }
 
-export interface IExtractedTableRow {
-  stt: number;
-  rawEmployeeCode: string;
-  normalizedEmployeeId: string;
-  matchedEmployeeName: string;
-  department: string;
-  rawDateStr: string;
-  normalizedDate: string; // YYYY-MM-DD
-  rawFromTime: string;
-  rawToTime: string;
-  extractedHours: number;
-  computedHoursFromTime?: number;
-  reason: string;
-  confidenceScore: number;
-  extractionStrategy: 'GRID_COLUMN_PROJECTION' | 'REGEX_SPATIAL_ANCHOR' | 'FUZZY_CATALOG_MATCH';
-  validationStatus: 'VALID' | 'WARNING' | 'INVALID';
-  validationMessage: string;
-}
+// ---------------------------------------------------------------------------
+// 1. Chuẩn hoá mã nhân viên (LEP/LP, thiếu số 0, nhầm O với 0)
+// ---------------------------------------------------------------------------
 
-export interface ITableExtractionResult {
-  detectedColumns: {
-    columnName: string;
-    xRange: [number, number];
-    sampleText: string;
-  }[];
-  extractedRows: IExtractedTableRow[];
-  totalRows: number;
-  validRowsCount: number;
-  processingTimeMs: number;
-}
-
-// 1. Employee Code Normalizer (Handles LEP026, LEP10 -> LEP010, LP026, LEP O26, etc.)
 export function normalizeEmployeeCode(rawText: string, catalog: IEmployee[]): {
   normalizedId: string;
   name: string;
   dept: string;
   matched: boolean;
 } {
-  const cleaned = rawText.toUpperCase().replace(/\s+/g, '').replace(/O/g, '0');
-  
-  // Direct match
-  const direct = catalog.find(e => e.employeeId.toUpperCase() === cleaned || e.erpId?.toUpperCase() === cleaned);
+  const cleaned = rawText.toUpperCase().replace(/\s+/g, '');
+
+  const tryCatalog = (candidate: string) =>
+    catalog.find(e => e.employeeId.toUpperCase() === candidate || e.erpId?.toUpperCase() === candidate);
+
+  // Đối chiếu trực tiếp trước
+  const direct = tryCatalog(cleaned);
   if (direct) {
     return { normalizedId: direct.employeeId, name: direct.fullName, dept: direct.department, matched: true };
   }
 
-  // Handle LEP10 -> LEP010 padding
-  const lepNumMatch = cleaned.match(/(?:LEP|LP)(\d+)/);
-  if (lepNumMatch) {
-    const num = parseInt(lepNumMatch[1], 10);
-    const padded1 = `LEP${String(num).padStart(3, '0')}`;
-    const padded2 = `LP${String(num).padStart(3, '0')}`;
-    const found = catalog.find(e => e.employeeId === padded1 || e.employeeId === padded2 || e.erpId === padded1);
-    if (found) {
-      return { normalizedId: found.employeeId, name: found.fullName, dept: found.department, matched: true };
+  // Nhóm tiền tố LEP/LP + phần số. Chỉ thay O->0 TRONG phần số phía sau tiền tố
+  // (tránh phá hỏng mã chứa chữ O thật ở vị trí khác)
+  const lepMatch = cleaned.match(/^(LEP|LP)([A-Z0-9]+)$/);
+  if (lepMatch) {
+    const digits = lepMatch[2].replace(/O/g, '0').replace(/\D/g, '');
+    if (digits) {
+      const num = parseInt(digits, 10);
+      const padded1 = `LEP${String(num).padStart(3, '0')}`;
+      const padded2 = `LP${String(num).padStart(3, '0')}`;
+      const found = catalog.find(e => e.employeeId === padded1 || e.employeeId === padded2 || e.erpId === padded1);
+      if (found) {
+        return { normalizedId: found.employeeId, name: found.fullName, dept: found.department, matched: true };
+      }
     }
   }
 
-  // Fallback digits only
-  const digits = cleaned.replace(/\D/g, '');
-  if (digits) {
-    const num = parseInt(digits, 10);
+  // Phương án cuối: chỉ có số -> thử ghép LEP{num}. Chỉ chấp nhận khi khớp danh mục,
+  // không bao giờ tự sáng tạo ra một mã mới
+  const digitsOnly = cleaned.replace(/\D/g, '');
+  if (digitsOnly && cleaned.length <= 4) {
+    const num = parseInt(digitsOnly, 10);
     const candidate = `LEP${String(num).padStart(3, '0')}`;
     const found = catalog.find(e => e.employeeId === candidate || e.erpId === candidate);
     if (found) {
@@ -79,180 +65,257 @@ export function normalizeEmployeeCode(rawText: string, catalog: IEmployee[]): {
     }
   }
 
+  return { normalizedId: cleaned || rawText.trim(), name: '', dept: '', matched: false };
+}
+
+// ---------------------------------------------------------------------------
+// 2. Chuẩn hoá chuỗi ngày (26/07/2026, 26-07-2026, 2026-07-26 -> 2026-07-26)
+// ---------------------------------------------------------------------------
+
+export function normalizeDateString(rawDate: string): { normalizedDate: string; valid: boolean } {
+  const input = (rawDate || '').trim();
+  if (!input) return { normalizedDate: '', valid: false };
+
+  // ISO YYYY-MM-DD ưu tiên tránh nhầm với DD/MM/YYYY
+  const iso = input.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (iso) {
+    return buildDate(iso[1], iso[2], iso[3]);
+  }
+
+  const match = input.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4}|\d{2})$/);
+  if (match) {
+    let year = match[3];
+    if (year.length === 2) year = `20${year}`;
+    return buildDate(year, match[2], match[1]);
+  }
+
+  return { normalizedDate: '', valid: false };
+}
+
+function buildDate(y: string, m: string, d: string): { normalizedDate: string; valid: boolean } {
+  const year = parseInt(y, 10);
+  const month = parseInt(m, 10);
+  const day = parseInt(d, 10);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return { normalizedDate: '', valid: false };
+  // Kiểm tra ngày tồn tại thật trong tháng
+  const daysInMonth = new Date(year, month, 0).getDate();
+  if (day > daysInMonth) return { normalizedDate: '', valid: false };
   return {
-    normalizedId: cleaned || rawText,
-    name: 'Chưa đối soát danh mục',
-    dept: 'WH',
-    matched: false
+    normalizedDate: `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`,
+    valid: true
   };
 }
 
-// 2. Date String Normalizer (Converts 26/07/2026, 26-07-2026, 26.07.2026 -> 2026-07-26)
-export function normalizeDateString(rawDate: string): { normalizedDate: string; valid: boolean } {
-  if (!rawDate) return { normalizedDate: '2026-07-26', valid: false };
+// ---------------------------------------------------------------------------
+// 3. Số giờ tăng ca: parse chuỗi HOẶC tính từ khung giờ - không bịa mặc định
+// ---------------------------------------------------------------------------
 
-  const match = rawDate.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4}|\d{2})/);
-  if (match) {
-    const day = String(parseInt(match[1], 10)).padStart(2, '0');
-    const month = String(parseInt(match[2], 10)).padStart(2, '0');
-    let year = match[3];
-    if (year.length === 2) year = `20${year}`;
-
-    return {
-      normalizedDate: `${year}-${month}-${day}`,
-      valid: true
-    };
-  }
-
-  return { normalizedDate: '2026-07-26', valid: false };
-}
-
-// 3. Overtime Hours & Time Interval Extractor (Extracts 8.0, 4.0 or calculates 16:00 - 07:30 - 0.5h lunch = 8.0h)
 export function parseOvertimeHours(
-  rawHoursText: string, 
-  fromTime: string = '07:30', 
-  toTime: string = '16:00'
-): { hours: number; computedFromTime?: number } {
-  // Direct hour match (e.g. "8.0", "8", "4.5", "2.5")
+  rawHoursText: string,
+  fromTime?: string,
+  toTime?: string
+): { hours: number | null; computedFromTime?: number } {
   const numMatch = rawHoursText?.match(/(\d+(?:[\.,]\d+)?)/);
-  let parsed = numMatch ? parseFloat(numMatch[1].replace(',', '.')) : 8.0;
+  const parsed = numMatch ? parseFloat(numMatch[1].replace(',', '.')) : null;
 
-  // Compute from time interval
-  let computedHours = 8.0;
-  if (fromTime && toTime && fromTime.includes(':') && toTime.includes(':')) {
+  let computedHours: number | undefined;
+  if (
+    fromTime && toTime &&
+    /^\d{1,2}:\d{2}$/.test(fromTime.trim()) &&
+    /^\d{1,2}:\d{2}$/.test(toTime.trim())
+  ) {
     const [fh, fm] = fromTime.split(':').map(Number);
     const [th, tm] = toTime.split(':').map(Number);
-    const diffMins = (th * 60 + tm) - (fh * 60 + fm);
+    let diffMins = (th * 60 + tm) - (fh * 60 + fm);
+    let startMin = fh * 60 + fm;
+    if (diffMins < 0) {
+      diffMins += 24 * 60; // ca qua đêm (22:00 -> 06:00)
+      // startMin giữ nguyên để kiểm tra cửa sổ nghỉ trưa theo ngày đầu
+    }
     if (diffMins > 0) {
-      // If lunch break included (e.g. 07:30 to 16:00 is 8.5h total, minus 30 min lunch = 8.0h)
-      computedHours = diffMins >= 480 ? 8.0 : parseFloat((diffMins / 60).toFixed(1));
+      // Quy ước biểu mẫu công ty: khung giờ >= 8 tiếng QUÉT QUA buổi trưa đã gồm
+      // 30 phút nghỉ trưa. Ca đêm không chạm buổi trưa thì không trừ.
+      const endMin = startMin + diffMins;
+      const overlapsNoonLunch = startMin < 13 * 60 && endMin > 12 * 60;
+      const mins = diffMins >= 480 && overlapsNoonLunch ? diffMins - 30 : diffMins;
+      computedHours = Math.round((mins / 60) * 100) / 100;
     }
   }
 
-  if (isNaN(parsed) || parsed <= 0) {
-    parsed = computedHours;
-  }
-
-  return { hours: parsed, computedFromTime: computedHours };
+  const hours = parsed !== null && parsed > 0 ? parsed : (computedHours ?? null);
+  return { hours, computedFromTime: computedHours };
 }
 
-// 4. Hybrid Table Grid Extraction Engine (Spatial Heuristics + Regex Entity Anchor)
-export async function extractOvertimeTableFromImage(
-  imageSource: string,
-  rawTokens?: IOCRBbox[]
-): Promise<ITableExtractionResult> {
-  const startTime = performance.now();
-  const catalog = await db.employees.toArray();
+// ---------------------------------------------------------------------------
+// 4. Map lưới OCR (theo bố cục ảnh scan) -> các dòng bảng đã phân cột
+// ---------------------------------------------------------------------------
 
-  // Ground truth extracted sample based on /workspaces/HR-System/image.png
-  const groundTruthRows = [
-    {
-      stt: 1,
-      rawCode: 'LEP026',
-      rawName: 'Nguyễn Bá Trình',
-      rawDept: 'WH',
-      rawDate: '26/07/2026',
-      from: '07:30',
-      to: '16:00',
-      rawHours: '8.0',
-      reason: 'Pick and tranfer to prod'
-    },
-    {
-      stt: 2,
-      rawCode: 'LEP028',
-      rawName: 'Mã Hén Chiêu',
-      rawDept: 'WH',
-      rawDate: '26/07/2026',
-      from: '07:30',
-      to: '16:00',
-      rawHours: '8.0',
-      reason: 'Pick and tranfer to prod'
-    },
-    {
-      stt: 3,
-      rawCode: 'LEP10', // Trịnh Đình Tâm has code LEP10 in image.png
-      rawName: 'Trịnh Đình Tâm',
-      rawDept: 'WH',
-      rawDate: '26/07/2026',
-      from: '07:30',
-      to: '16:00',
-      rawHours: '8.0',
-      reason: 'Pick and tranfer to prod'
-    },
-    {
-      stt: 4,
-      rawCode: 'LEP018',
-      rawName: 'Thạch Bạch Tra',
-      rawDept: 'WH',
-      rawDate: '26/07/2026',
-      from: '07:30',
-      to: '16:00',
-      rawHours: '8.0',
-      reason: 'Pick and tranfer to prod'
-    },
-    {
-      stt: 5,
-      rawCode: 'LEP149',
-      rawName: 'Hà Ngọc Lưu',
-      rawDept: 'WH',
-      rawDate: '26/07/2026',
-      from: '07:30',
-      to: '16:00',
-      rawHours: '8.0',
-      reason: 'Pick and tranfer to prod'
+type CanonicalField =
+  | 'stt' | 'fullName' | 'employeeCode' | 'department'
+  | 'date' | 'timeRange' | 'fromTime' | 'toTime'
+  | 'hours' | 'reason' | 'unknown';
+
+const COLUMN_PATTERNS: { field: CanonicalField; pattern: RegExp }[] = [
+  { field: 'stt', pattern: /^(stt|số\s*tt|no\.?|seq)$/i },
+  { field: 'employeeCode', pattern: /(mã\s*(số|nv|nhân viên|empl)|empl.*code|employee\s*code|^code)/i },
+  { field: 'fullName', pattern: /(họ|tên|full\s*name|^name)/i },
+  { field: 'department', pattern: /(bộ phận|đơn vị|phòng|dept|department)/i },
+  { field: 'date', pattern: /(ngày|^date|ot\s*date)/i },
+  { field: 'timeRange', pattern: /(thời gian|giờ làm|^time$|from\s*-\s*to)/i },
+  { field: 'fromTime', pattern: /(từ|^from)/i },
+  { field: 'toTime', pattern: /(đến|^to$)/i },
+  { field: 'hours', pattern: /(số giờ|ot hours|^hours|giờ tăng ca)/i },
+  { field: 'reason', pattern: /(lý do|reason|nội dung)/i },
+];
+
+function classifyHeaderText(text: string): CanonicalField {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (!t) return 'unknown';
+  for (const { field, pattern } of COLUMN_PATTERNS) {
+    if (pattern.test(t)) return field;
+  }
+  return 'unknown';
+}
+
+/** Phân loại ô theo nội dung khi không tìm thấy dòng header */
+function classifyByContent(text: string): CanonicalField {
+  const t = text.trim();
+  if (/^\d{1,2}$/.test(t)) return 'stt';
+  if (/^(LEP|LP)\s*\d+/i.test(t)) return 'employeeCode';
+  if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(t)) return 'date';
+  if (/^\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}$/.test(t)) return 'timeRange';
+  if (/^\d{1,2}:\d{2}$/.test(t)) return 'unknown'; // không đủ căn cứ tách từ/đến
+  if (/^\d+(\.\d+)?$/.test(t)) return 'hours';
+  if (/[\p{L}]/u.test(t) && t.length >= 3) return 'fullName';
+  return 'unknown';
+}
+
+export interface IMappedTableRow {
+  stt?: number;
+  fullName?: string;
+  employeeCode?: string;
+  department?: string;
+  /** Ngày thô trên phiếu, ví dụ 26/07/2026 */
+  rawDate?: string;
+  fromTime?: string;
+  toTime?: string;
+  hoursText?: string;
+  reason?: string;
+  confidence: number;
+}
+
+interface GridCellRef {
+  text: string;
+  confidence: number;
+  x0: number;
+  x1: number;
+}
+
+/**
+ * Tái tạo cấu trúc bảng từ lưới OCR phản chiếu đúng bố cục ảnh scan:
+ *  - Tìm dòng header bằng từ khoá (STT, Họ tên, Mã NV, Bộ phận, Ngày, Thời gian, Số giờ, Lý do)
+ *  - Gán từng ô của các dòng sau vào cột theo khoảng x của header
+ *  - Không có header thì phân loại theo nội dung từng ô (heuristic, người dùng kiểm tra lại)
+ */
+export function mapGridToTableRows(grid: OcrTableGrid): IMappedTableRow[] {
+  if (grid.rows.length === 0) return [];
+
+  // 1. Tìm dòng header: hàng nhiều từ khoá cột nhất
+  let headerIdx = -1;
+  let headerScore = 0;
+  let headerFields: CanonicalField[] = [];
+
+  grid.rows.forEach((row, idx) => {
+    const fields = row.cells.map(c => classifyHeaderText(c.text));
+    const score = fields.filter(f => f !== 'unknown').length;
+    if (score >= 2 && score > headerScore) {
+      headerScore = score;
+      headerIdx = idx;
+      headerFields = fields;
     }
-  ];
+  });
 
-  const detectedColumns = [
-    { columnName: 'STT / No', xRange: [0, 40] as [number, number], sampleText: '1, 2, 3, 4, 5' },
-    { columnName: 'Họ Tên / Full Name', xRange: [40, 180] as [number, number], sampleText: 'Nguyễn Bá Trình, Trịnh Đình Tâm' },
-    { columnName: 'Mã số / Empl.Code', xRange: [180, 260] as [number, number], sampleText: 'LEP026, LEP028, LEP10, LEP018, LEP149' },
-    { columnName: 'Bộ phận / Department', xRange: [260, 320] as [number, number], sampleText: 'WH' },
-    { columnName: 'Ngày tăng ca / OT date', xRange: [320, 420] as [number, number], sampleText: '26/07/2026' },
-    { columnName: 'Thời gian Từ - Đến', xRange: [420, 560] as [number, number], sampleText: '07:30 - 16:00' },
-    { columnName: 'Số giờ tăng ca / OT hours', xRange: [560, 640] as [number, number], sampleText: '8.0' },
-    { columnName: 'Lý do / Reason', xRange: [640, 900] as [number, number], sampleText: 'Pick and tranfer to prod' }
-  ];
+  const dataRows = grid.rows
+    .map((r, i) => ({ row: r, idx: i }))
+    .filter(({ idx }) => idx !== headerIdx);
 
-  const extractedRows: IExtractedTableRow[] = [];
+  // Bỏ các dòng trang trí/ký hiệu trống
+  const meaningful = dataRows.filter(({ row }) => row.cells.some(c => c.text.trim().length > 0));
 
-  for (const r of groundTruthRows) {
-    // 1. Normalize Employee Code & match catalog
-    const normEmp = normalizeEmployeeCode(r.rawCode, catalog);
+  const mapped: IMappedTableRow[] = [];
 
-    // 2. Normalize Date
-    const normDate = normalizeDateString(r.rawDate);
+  if (headerIdx >= 0) {
+    // Gán ô vào cột theo khoảng x của header
+    const headerRow = grid.rows[headerIdx];
+    const colRanges = headerRow.cells.map((c, i) => ({ x0: c.x0, x1: c.x1, field: headerFields[i] }));
 
-    // 3. Parse OT Hours & Time
-    const hoursInfo = parseOvertimeHours(r.rawHours, r.from, r.to);
-
-    extractedRows.push({
-      stt: r.stt,
-      rawEmployeeCode: r.rawCode,
-      normalizedEmployeeId: normEmp.normalizedId,
-      matchedEmployeeName: normEmp.name !== 'Chưa đối soát danh mục' ? normEmp.name : r.rawName,
-      department: r.rawDept,
-      rawDateStr: r.rawDate,
-      normalizedDate: normDate.normalizedDate,
-      rawFromTime: r.from,
-      rawToTime: r.to,
-      extractedHours: hoursInfo.hours,
-      computedHoursFromTime: hoursInfo.computedFromTime,
-      reason: r.reason,
-      confidenceScore: 0.98,
-      extractionStrategy: r.rawCode === 'LEP10' ? 'FUZZY_CATALOG_MATCH' : 'GRID_COLUMN_PROJECTION',
-      validationStatus: 'VALID',
-      validationMessage: `Nhận dạng thành công: Mã [${normEmp.normalizedId}] ngày [${normDate.normalizedDate}] tăng ca [${hoursInfo.hours}h]`
-    });
+    for (const { row } of meaningful) {
+      const acc: Record<string, GridCellRef[]> = {};
+      for (const cell of row.cells) {
+        if (!cell.text.trim()) continue;
+        const centerX = (cell.x0 + cell.x1) / 2;
+        // Tìm cột header phủ tâm ô; không thấy thì chọn cột gần nhất có field rõ
+        let best = colRanges.findIndex(cr => centerX >= cr.x0 - 20 && centerX <= cr.x1 + 20);
+        if (best < 0) {
+          let bestDist = Infinity;
+          colRanges.forEach((cr, ci) => {
+            const dist = Math.abs(centerX - (cr.x0 + cr.x1) / 2);
+            if (dist < bestDist && cr.field !== 'unknown') { bestDist = dist; best = ci; }
+          });
+        }
+        const field = best >= 0 ? colRanges[best].field : 'unknown';
+        if (field === 'unknown') continue;
+        (acc[field] ||= []).push(cell);
+      }
+      mapped.push(accumulateToRow(acc));
+    }
+  } else {
+    // Không tìm thấy header: xếp hạng theo nội dung
+    for (const { row } of meaningful) {
+      const acc: Record<string, GridCellRef[]> = {};
+      for (const cell of [...row.cells].sort((a, b) => a.x0 - b.x0)) {
+        if (!cell.text.trim()) continue;
+        const field = classifyByContent(cell.text);
+        if (field === 'unknown') continue;
+        (acc[field] ||= []).push(cell);
+      }
+      const r = accumulateToRow(acc);
+      if (Object.keys(r).length > 1) mapped.push(r);
+    }
   }
 
-  const processingTimeMs = Math.round(performance.now() - startTime);
+  return mapped;
+}
+
+function accumulateToRow(acc: Record<string, GridCellRef[]>): IMappedTableRow {
+  const joinCells = (cells?: GridCellRef[]) => cells?.map(c => c.text.trim()).filter(Boolean).join(' ');
+  const avgConf = (cells?: GridCellRef[]) =>
+    cells && cells.length ? cells.reduce((s, c) => s + c.confidence, 0) / cells.length : 0;
+
+  const sttRaw = joinCells(acc['stt']);
+  const timeRange = joinCells(acc['timeRange']);
+  let fromTime = joinCells(acc['fromTime']);
+  let toTime = joinCells(acc['toTime']);
+  if (timeRange && (!fromTime || !toTime)) {
+    const parts = timeRange.match(/(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})/);
+    if (parts) {
+      fromTime ||= parts[1];
+      toTime ||= parts[2];
+    }
+  }
+
+  const confidences = Object.values(acc).map(avgConf).filter(c => c > 0);
 
   return {
-    detectedColumns,
-    extractedRows,
-    totalRows: extractedRows.length,
-    validRowsCount: extractedRows.filter(r => r.validationStatus === 'VALID').length,
-    processingTimeMs
+    stt: sttRaw ? parseInt(sttRaw, 10) || undefined : undefined,
+    fullName: joinCells(acc['fullName']),
+    employeeCode: joinCells(acc['employeeCode']),
+    department: joinCells(acc['department']),
+    rawDate: joinCells(acc['date']),
+    fromTime,
+    toTime,
+    hoursText: joinCells(acc['hours']),
+    reason: joinCells(acc['reason']),
+    confidence: confidences.length ? confidences.reduce((s, c) => s + c, 0) / confidences.length : 0,
   };
 }

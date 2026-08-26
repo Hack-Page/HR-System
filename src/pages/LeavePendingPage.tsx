@@ -22,7 +22,7 @@ import { useAuth } from '../context/AuthContext';
 export const LeavePendingPage: React.FC = () => {
   const { success, warning, error } = useToast();
   const { alertModal, confirm } = useModal();
-  const { departmentScope, hasPermission } = useAuth();
+  const { departmentScope, hasPermission, session, currentRole } = useAuth();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
@@ -48,15 +48,20 @@ export const LeavePendingPage: React.FC = () => {
 
   const departments = Array.from(new Set(employees.map(e => e.department))).filter(Boolean);
 
-  // Handle approving leave compensation
+  // Handle approving leave compensation (yêu cầu quyền MANAGE_LEAVE)
   const handleApproveLeave = async (req: ILeaveRequest, chosenType: LeaveType) => {
+    if (!hasPermission('MANAGE_LEAVE')) {
+      error('Không đủ quyền', 'Bạn không có quyền phê duyệt nghỉ phép (MANAGE_LEAVE).');
+      return;
+    }
     const emp = employees.find(e => e.employeeId === req.employeeId);
     if (!emp) {
       error('Không tìm thấy nhân viên', `Mã NV: ${req.employeeId}`);
       return;
     }
 
-    // ANNUAL LEAVE QUOTA ENFORCEMENT
+    // ANNUAL LEAVE QUOTA ENFORCEMENT - kiểm tra trước để báo UI thân thiện,
+    // kiểm tra chặt (atomic) nằm trong transaction bên dưới
     if (chosenType === 'AL') {
       const remainingQuota = emp.annualLeaveBalance?.remainingDays ?? 0;
       if (remainingQuota < req.durationDays) {
@@ -76,15 +81,6 @@ export const LeavePendingPage: React.FC = () => {
         );
         return;
       }
-
-      // Deduct annual leave balance
-      await db.employees.update(emp.employeeId, {
-        annualLeaveBalance: {
-          ...emp.annualLeaveBalance,
-          usedDays: (emp.annualLeaveBalance?.usedDays ?? 0) + req.durationDays,
-          remainingDays: remainingQuota - req.durationDays
-        }
-      });
     }
 
     // Map LeaveType to AttendanceStatusCode
@@ -96,26 +92,53 @@ export const LeavePendingPage: React.FC = () => {
     else if (chosenType === 'MATERNITY') newStatusCode = 'MATERNITY LEAVE';
     else if (chosenType === 'UL') newStatusCode = req.durationDays === 0.5 ? 'W/2 UL/2' : 'UL';
 
-    // Update Timesheet cell
+    // Update Timesheet cell - kỳ lấy từ ngày yêu cầu thay vì tháng cứng
     const cellKey = `${req.employeeId}_${req.date}`;
-    await db.dailyTimesheets.put({
-      employeeId_date: cellKey,
-      employeeId: req.employeeId,
-      date: req.date,
-      dayIndex: parseInt(req.date.split('-')[2], 10),
-      statusCode: newStatusCode,
-      calculatedOvertime: 0,
-      month: 8,
-      year: 2026
-    });
+    const [y, m] = req.date.split('-').map(Number);
 
-    // Update Leave Request status
-    await db.leaveRequests.update(req.id, {
-      status: 'APPROVED',
-      leaveType: chosenType,
-      processedBy: 'HR Admin',
-      processedAt: new Date().toISOString()
-    });
+    try {
+      // Toàn bộ phê duyệt trong MỘT transaction: trừ phép năm + ghi công + đổi trạng thái
+      // là nguyên khối hoặc không có gì (chống double-spend hạn mức khi duyệt nhanh liên tiếp)
+      await db.transaction('rw', db.employees, db.dailyTimesheets, db.leaveRequests, async () => {
+        const freshEmp = await db.employees.get(req.employeeId);
+        if (!freshEmp) throw new Error(`Nhân viên ${req.employeeId} vừa bị xoá khỏi hệ thống`);
+
+        if (chosenType === 'AL') {
+          const remainingQuota = freshEmp.annualLeaveBalance?.remainingDays ?? 0;
+          if (remainingQuota < req.durationDays) {
+            throw new Error(`Hạn mức phép năm chỉ còn ${remainingQuota} ngày - không đủ ${req.durationDays} ngày`);
+          }
+          await db.employees.update(req.employeeId, {
+            annualLeaveBalance: {
+              ...freshEmp.annualLeaveBalance,
+              usedDays: (freshEmp.annualLeaveBalance?.usedDays ?? 0) + req.durationDays,
+              remainingDays: remainingQuota - req.durationDays
+            }
+          });
+        }
+
+        await db.dailyTimesheets.put({
+          employeeId_date: cellKey,
+          employeeId: req.employeeId,
+          date: req.date,
+          dayIndex: parseInt(req.date.split('-')[2], 10),
+          statusCode: newStatusCode,
+          calculatedOvertime: 0,
+          month: m,
+          year: y
+        });
+
+        await db.leaveRequests.update(req.id, {
+          status: 'APPROVED',
+          leaveType: chosenType,
+          processedBy: session?.displayName ?? currentRole ?? 'unknown',
+          processedAt: new Date().toISOString()
+        });
+      });
+    } catch (e: any) {
+      error('Phê duyệt thất bại', e?.message || String(e));
+      return;
+    }
 
     success(
       'Phê duyệt bù phép thành công!',
@@ -123,8 +146,12 @@ export const LeavePendingPage: React.FC = () => {
     );
   };
 
-  // Reject / mark unauthorized
+  // Reject / mark unauthorized (yêu cầu quyền MANAGE_LEAVE)
   const handleRejectLeave = async (req: ILeaveRequest) => {
+    if (!hasPermission('MANAGE_LEAVE')) {
+      error('Không đủ quyền', 'Bạn không có quyền xử lý nghỉ phép (MANAGE_LEAVE).');
+      return;
+    }
     const ok = await confirm({
       title: 'Xác nhận ghi nhận Không Phép',
       message: `Bạn có chắc chắn muốn ghi nhận vi phạm nghỉ không phép cho nhân viên [${req.employeeId}] ${req.fullName} vào ngày ${req.date}?`,

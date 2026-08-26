@@ -45,19 +45,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const overtimes = useLiveQuery(() => db.overtimeRecords.toArray(), []) || [];
   const leaveRequests = useLiveQuery(() => db.leaveRequests.toArray(), []) || [];
 
-  // Compute all Dashboard Metrics
+  // Compute all Dashboard Metrics - No fallback inflation, show true data with EmptyState
   const stats = useMemo(() => {
-    const total = employees.length || 102;
-    const official = employees.filter(e => e.contractType === 'OFFICIAL').length || 78;
-    const seasonal = employees.filter(e => e.contractType === 'SEASONAL').length || 24;
+    const total = employees.length;
+    const official = employees.filter(e => e.contractType === 'OFFICIAL').length;
+    const seasonal = employees.filter(e => e.contractType === 'SEASONAL').length;
 
-    const shift1 = employees.filter(e => e.shiftClassId === 'SHIFT_1').length || 42;
-    const shift2 = employees.filter(e => e.shiftClassId === 'SHIFT_2').length || 36;
-    const office = employees.filter(e => e.shiftClassId === 'OFFICE_M_F' || e.shiftClassId === 'OFFICE_M_S').length || 24;
+    const shift1 = employees.filter(e => e.shiftClassId === 'SHIFT_1').length;
+    const shift2 = employees.filter(e => e.shiftClassId === 'SHIFT_2').length;
+    const office = employees.filter(e => e.shiftClassId === 'OFFICE_M_F' || e.shiftClassId === 'OFFICE_M_S').length;
 
-    const resigned = employees.filter(e => e.status === 'RESIGNED').length || 3;
-    const newHires = employees.filter(e => e.startDate && (e.startDate.includes('2026') || e.startDate.includes('26'))).length || 8;
-    const turnoverRate = total > 0 ? ((resigned / total) * 100).toFixed(1) : '2.9';
+    const resigned = employees.filter(e => e.status === 'RESIGNED').length;
+    const newHires = employees.filter(e => e.startDate && (e.startDate.includes('2026') || e.startDate.includes('26'))).length;
+    const turnoverRate = total > 0 ? ((resigned / total) * 100).toFixed(1) : '0.0';
 
     // Department breakdown
     const deptMap: Record<string, { total: number; official: number; seasonal: number; late: number; early: number; missing: number; violation12h: number }> = {};
@@ -120,8 +120,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       }
     });
 
-    const lateRate = totalWorkdaySlots > 0 ? ((totalLateCount / totalWorkdaySlots) * 100).toFixed(1) : '5.2';
-    const missingPunchRate = totalWorkdaySlots > 0 ? ((totalMissingPunch / totalWorkdaySlots) * 100).toFixed(1) : '2.1';
+    const lateRate = totalWorkdaySlots > 0 ? ((totalLateCount / totalWorkdaySlots) * 100).toFixed(1) : '0.0';
+    const missingPunchRate = totalWorkdaySlots > 0 ? ((totalMissingPunch / totalWorkdaySlots) * 100).toFixed(1) : '0.0';
 
     const departmentChartData = Object.keys(deptMap).map(k => ({
       name: k,
@@ -134,8 +134,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       violation12h: deptMap[k].violation12h,
     }));
 
-    const pendingLeave = leaveRequests.filter(r => r.status === 'PENDING').length || 4;
-    const pendingOT = overtimes.filter(o => o.verificationStatus === 'PENDING').length || 21;
+    const pendingLeave = leaveRequests.filter(r => r.status === 'PENDING').length;
+    const pendingOT = overtimes.filter(o => o.verificationStatus === 'PENDING').length;
 
     return {
       total,
@@ -147,12 +147,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       resigned,
       newHires,
       turnoverRate,
-      totalLateCount: totalLateCount || 21,
-      totalEarlyCount: totalEarlyCount || 7,
-      totalMissingPunch: totalMissingPunch || 11,
+      totalLateCount,
+      totalEarlyCount,
+      totalMissingPunch,
       lateRate,
       missingPunchRate,
-      total12hViolations: total12hViolations || 4,
+      total12hViolations,
       pendingLeave,
       pendingOT,
       departmentChartData
