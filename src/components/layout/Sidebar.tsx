@@ -10,7 +10,8 @@ import {
   Settings,
   Briefcase,
   ClipboardList,
-  ExternalLink
+  ExternalLink,
+  ShieldAlert
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -25,6 +26,7 @@ export type NavPageId =
   | 'leavePending' 
   | 'shiftRoster' 
   | 'shiftAssignment'
+  | 'attendanceViolation'
   | 'ocrVerification' 
   | 'settings';
 
@@ -37,18 +39,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onSelectPage }) =>
   const { t } = useLanguage();
   const { session, currentRole } = useAuth();
 
-  // Combined live badges query - gộp 3 query thành 1 để giảm IndexedDB reads
+  // Combined live badges query - gộp 4 query thành 1 để giảm IndexedDB reads
   const badgeCounts = useLiveQuery(async () => {
-    const [pendingLeave, violations, pendingOT] = await Promise.all([
+    const [pendingLeave, violations, pendingOT, attendanceViolations] = await Promise.all([
       db.leaveRequests.where('status').equals('PENDING').count(),
       db.shiftRosters.filter(item => Boolean(item.isRestViolation)).count(),
       db.overtimeRecords.where('verificationStatus').equals('PENDING').count(),
+      db.dailyTimesheets.filter(ts => ['LA','ED','MCO','MCI'].includes(ts.statusCode || '')).count(),
     ]);
-    return { pendingLeave, violations, pendingOT };
+    return { pendingLeave, violations, pendingOT, attendanceViolations };
   }, []);
   const pendingLeaveCount = badgeCounts?.pendingLeave ?? 0;
   const shiftViolationCount = badgeCounts?.violations ?? 0;
   const pendingOTCount = badgeCounts?.pendingOT ?? 0;
+  const attendanceViolationCount = badgeCounts?.attendanceViolations ?? 0;
 
   const menuItemClass = (isActive: boolean) => `w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-medium transition ${
     isActive
@@ -153,6 +157,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onSelectPage }) =>
             <Briefcase className={`w-4 h-4 ${activePage === 'shiftAssignment' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
             <span>{t('shiftAssignment')}</span>
           </div>
+        </button>
+
+        {/* Theo dõi Đi trễ/Về sớm/MCO/MCI - mới */}
+        <button
+          onClick={() => onSelectPage('attendanceViolation')}
+          className={menuItemClass(activePage === 'attendanceViolation')}
+        >
+          <div className="flex items-center gap-2.5">
+            <ShieldAlert className={`w-4 h-4 ${activePage === 'attendanceViolation' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+            <span>{t('attendanceViolation')}</span>
+          </div>
+          {attendanceViolationCount > 0 && (
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-800 border border-orange-200">
+              {attendanceViolationCount}
+            </span>
+          )}
         </button>
 
         {/* OCR Overtime Verification */}

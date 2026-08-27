@@ -171,7 +171,7 @@ export async function exportTimesheetToExcel(
       cell.value = val;
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-      // Styling based on code
+      // Styling based on code - cập nhật PL tang/cưới, PH lễ, LA/ED/MCO/MCI
       if (val === 'W') {
         cell.font = { color: { argb: 'FF065F46' }, bold: true };
       } else if (val === 'N') {
@@ -186,6 +186,23 @@ export async function exportTimesheetToExcel(
       } else if (val === 'UL') {
         cell.font = { color: { argb: 'FF475569' } };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      } else if (val === 'PL') {
+        cell.font = { color: { argb: 'FF0F766E' }, bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCFBF1' } };
+      } else if (val === 'PH') {
+        cell.font = { color: { argb: 'FF92400E' }, bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+      } else if (val === 'LA' || val === 'ED') {
+        cell.font = { color: { argb: 'FF9A3412' }, bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+      } else if (val === 'MCO' || val === 'MCI') {
+        cell.font = { color: { argb: 'FF991B1B' }, bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+      }
+
+      // Ghi chú vi phạm vào comment Excel nếu có
+      if (cellData?.violationNote) {
+        cell.note = cellData.violationNote;
       }
 
       if (cellData) empCells.push(cellData);

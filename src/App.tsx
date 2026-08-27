@@ -17,6 +17,7 @@ import { OvertimePage } from './pages/OvertimePage';
 import { LeavePendingPage } from './pages/LeavePendingPage';
 import { ShiftRosterPage } from './pages/ShiftRosterPage';
 import { ShiftAssignmentPage } from './pages/ShiftAssignmentPage';
+import { AttendanceViolationPage } from './pages/AttendanceViolationPage';
 import { OCRVerificationPage } from './pages/OCRVerificationPage';
 import { SettingsPage } from './pages/SettingsPage';
 
@@ -42,6 +43,7 @@ const Shell: React.FC = () => {
       {activePage === 'leavePending' && <LeavePendingPage />}
       {activePage === 'shiftRoster' && <ShiftRosterPage />}
       {activePage === 'shiftAssignment' && <ShiftAssignmentPage />}
+      {activePage === 'attendanceViolation' && <AttendanceViolationPage />}
       {activePage === 'ocrVerification' && <OCRVerificationPage onNavigate={setActivePage} />}
       {activePage === 'settings' && <SettingsPage />}
     </Layout>

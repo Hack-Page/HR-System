@@ -40,13 +40,19 @@ export interface CountBag {
   countSL: number;
   countPL: number;
   countOff: number;
+  // Mã vi phạm chấm công mới (chỉ đếm để thống kê, không ảnh hưởng công thức cũ)
+  countLA: number;   // Late Arrival - Đi trễ <30p (tính vẫn là W nhưng tách riêng để theo dõi)
+  countED: number;   // Early Departure - Về sớm <30p
+  countMCO: number;  // Missing Clock-Out
+  countMCI: number;  // Missing Clock-In
 }
 
 // Helper: Tính CountBag từ cells
 export function buildCountBag(cells: { statusCode: AttendanceStatusCode }[]): CountBag {
   const bag: CountBag = {
     countW: 0, countN: 0, countBT: 0, countW_AL: 0, countW_UL: 0,
-    countAL: 0, countUL: 0, countAL_UL: 0, countPH: 0, countSL: 0, countPL: 0, countOff: 0
+    countAL: 0, countUL: 0, countAL_UL: 0, countPH: 0, countSL: 0, countPL: 0, countOff: 0,
+    countLA: 0, countED: 0, countMCO: 0, countMCI: 0
   };
   for (const cell of cells) {
     const code = cell.statusCode?.trim() || '';
@@ -62,9 +68,16 @@ export function buildCountBag(cells: { statusCode: AttendanceStatusCode }[]): Co
     else if (code === 'PH') bag.countPH++;
     else if (code === 'SL') bag.countSL++;
     else if (code === 'PL') bag.countPL++;
+    else if (code === 'LA') bag.countLA++;
+    else if (code === 'ED') bag.countED++;
+    else if (code === 'MCO') bag.countMCO++;
+    else if (code === 'MCI') bag.countMCI++;
   }
   // Off được tính như UL trong công thức chốt công
   bag.countUL += bag.countOff;
+  // LA/ED vẫn tính như W trong công thực tế? Giữ nguyên logic cũ: LA/ED = W về mặt công, nhưng tách riêng để theo dõi trễ/sớm
+  // Để không làm vỡ công thức 58 cột, LA/ED không cộng vào actualWD mặc định, nhưng sẽ thống kê riêng ở dashboard vi phạm.
+  // Nếu muốn LA/ED tính như W, có thể cộng: bag.countW += bag.countLA + bag.countED (bỏ comment dòng dưới nếu yêu cầu)
   return bag;
 }
 

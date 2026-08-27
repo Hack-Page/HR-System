@@ -122,10 +122,16 @@ export const TimesheetCalendarPage: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <CalendarDays className="w-5 h-5 text-orange-500" />
-            <span>Bảng Chấm Công 31 Ngày (Timesheet Calendar Matrix)</span>
+            <span>Bảng chấm công</span>
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Tham chiếu từ dữ liệu quẹt thẻ máy chấm công. Hiển thị ma trận 31 ngày kèm các cột tổng hợp công thức Excel chi tiết (58 cột chuẩn).
+          <p className="text-xs text-slate-500 mt-1 max-w-[820px] leading-relaxed">
+            Tham chiếu từ dữ liệu quẹt thẻ máy chấm công, đảm bảo mã số nhân viên trong hệ thống dữ liệu quẹt thẻ chấm công phải khớp với dữ liệu mã số nhân viên của menu danh mục nhân viên.
+          </p>
+          <p className="text-[11px] text-slate-400 mt-1.5 flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500"></span> PL = Phép tang hoặc kết hôn</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> PH = Nghỉ lễ (tự động khi cả công ty không đi — ngày thường không chấm công trừ CN)</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span> LA = Đi trễ &lt;30p • ED = Về sớm &lt;30p • &gt;30p chờ duyệt phép</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500"></span> MCO/MCI = Không chấm ra/vào</span>
           </p>
         </div>
 
@@ -179,7 +185,7 @@ export const TimesheetCalendarPage: React.FC = () => {
           </select>
         </div>
 
-        {/* Legend Badges */}
+        {/* Legend Badges - cập nhật PL/PH + mã mới LA/ED/MCO/MCI */}
         <div className="flex items-center gap-2 flex-wrap text-[11px] font-semibold text-slate-600">
           <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">W: Đủ công</span>
           <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200">N: Ca đêm</span>
@@ -187,6 +193,12 @@ export const TimesheetCalendarPage: React.FC = () => {
           <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">AL: Phép năm</span>
           <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">UL: Không lương</span>
           <span className="px-2 py-0.5 rounded-lg bg-pink-50 text-pink-700 border border-pink-200">SL: Nghỉ ốm</span>
+          <span className="px-2 py-0.5 rounded-lg bg-teal-50 text-teal-700 border border-teal-200" title="Phép tang hoặc kết hôn">PL: Tang/Cưới</span>
+          <span className="px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-200" title="Tự động khi cả công ty nghỉ ngày thường (trừ CN)">PH: Nghỉ lễ</span>
+          <span className="px-2 py-0.5 rounded-lg bg-orange-50 text-orange-700 border border-orange-200" title="Đi trễ <30p; >=30p chờ duyệt phép">LA: Đi trễ</span>
+          <span className="px-2 py-0.5 rounded-lg bg-orange-50 text-orange-700 border border-orange-200" title="Về sớm <30p; >=30p chờ duyệt phép">ED: Về sớm</span>
+          <span className="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200" title="Có vào, không có ra">MCO: Không ra</span>
+          <span className="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200" title="Có ra, không có vào">MCI: Không vào</span>
         </div>
       </div>
 
@@ -194,14 +206,13 @@ export const TimesheetCalendarPage: React.FC = () => {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1 flex flex-col">
         <div className="overflow-x-auto overflow-y-auto max-h-[70vh] flex-1">
           <table className="w-full text-left text-xs border-collapse">
-            {/* Table Header */}
+            {/* Table Header - Bộ phận gộp chung dưới Họ và Tên để không tràn cột ngày 1 */}
             <thead className="bg-slate-900 text-white font-bold sticky top-0 z-30 shadow-md">
               <tr>
-                {/* Fixed Sticky Columns */}
+                {/* Fixed Sticky Columns - chỉ 3 cột cố định */}
                 <th className="py-2.5 px-3 bg-slate-900 sticky left-0 z-40 w-12 text-center border-r border-slate-800">#</th>
                 <th className="py-2.5 px-3 bg-slate-900 sticky left-12 z-40 w-24 border-r border-slate-800">Mã NV</th>
-                <th className="py-2.5 px-4 bg-slate-900 sticky left-36 z-40 min-w-[180px] border-r border-slate-800">Họ và Tên</th>
-                <th className="py-2.5 px-3 bg-slate-900 sticky left-[324px] z-40 w-28 border-r border-slate-800">Bộ Phận</th>
+                <th className="py-2.5 px-4 bg-slate-900 sticky left-36 z-40 min-w-[200px] border-r border-slate-800">Họ và Tên <span className="font-normal opacity-60 text-[10px]">( + Bộ phận)</span></th>
 
                 {/* 31 Calendar Columns */}
                 {calendarDays.map((day) => (
@@ -246,7 +257,7 @@ export const TimesheetCalendarPage: React.FC = () => {
 
                 return (
                   <tr key={emp.employeeId} className="hover:bg-orange-50/30 transition group">
-                    {/* Fixed Sticky Cells */}
+                    {/* Fixed Sticky Cells - Bộ phận nằm gọn dưới tên */}
                     <td className="py-2 px-3 bg-white group-hover:bg-orange-50/50 sticky left-0 z-20 text-center font-semibold text-slate-400 border-r border-slate-200">
                       {empIdx + 1}
                     </td>
@@ -255,11 +266,11 @@ export const TimesheetCalendarPage: React.FC = () => {
                         {emp.employeeId}
                       </span>
                     </td>
-                    <td className="py-2 px-4 bg-white group-hover:bg-orange-50/50 sticky left-36 z-20 font-bold text-slate-800 border-r border-slate-200 whitespace-nowrap">
-                      {emp.fullName}
-                    </td>
-                    <td className="py-2 px-3 bg-white group-hover:bg-orange-50/50 sticky left-[324px] z-20 font-semibold text-slate-600 border-r border-slate-200">
-                      {emp.department}
+                    <td className="py-2 px-3 bg-white group-hover:bg-orange-50/50 sticky left-36 z-20 border-r border-slate-200 min-w-[200px]">
+                      <div className="font-bold text-slate-800 text-xs leading-tight truncate" title={emp.fullName}>{emp.fullName}</div>
+                      <div className="text-[11px] font-semibold text-slate-500 truncate flex items-center gap-1" title={emp.department}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300 shrink-0"></span>{emp.department}
+                      </div>
                     </td>
 
                     {/* 31 Calendar Cells */}
@@ -270,23 +281,31 @@ export const TimesheetCalendarPage: React.FC = () => {
 
                       let cellBadge = <span className="text-slate-300">-</span>;
                       if (code === 'W') {
-                        cellBadge = <span className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-[11px] shadow-sm">W</span>;
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-[11px] shadow-sm" title="Đi làm đủ">W</span>;
                       } else if (code === 'N') {
-                        cellBadge = <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-800 font-bold flex items-center justify-center text-[11px] shadow-sm">N</span>;
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-800 font-bold flex items-center justify-center text-[11px] shadow-sm" title="Ca đêm">N</span>;
                       } else if (code === 'Off') {
-                        cellBadge = <span className="w-7 h-7 rounded-lg bg-rose-100 text-rose-800 font-bold flex items-center justify-center text-[11px] shadow-sm animate-pulse">Off</span>;
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-rose-100 text-rose-800 font-bold flex items-center justify-center text-[11px] shadow-sm animate-pulse" title="Chờ bù phép">Off</span>;
                       } else if (code === 'AL') {
-                        cellBadge = <span className="w-7 h-7 rounded-lg bg-blue-100 text-blue-800 font-bold flex items-center justify-center text-[11px]">AL</span>;
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-blue-100 text-blue-800 font-bold flex items-center justify-center text-[11px]" title="Phép năm">AL</span>;
                       } else if (code === 'UL') {
-                        cellBadge = <span className="w-7 h-7 rounded-lg bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-[11px]">UL</span>;
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-[11px]" title="Không lương">UL</span>;
                       } else if (code === 'SL') {
-                        cellBadge = <span className="w-7 h-7 rounded-lg bg-pink-100 text-pink-800 font-bold flex items-center justify-center text-[11px]">SL</span>;
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-pink-100 text-pink-800 font-bold flex items-center justify-center text-[11px]" title="Nghỉ ốm">SL</span>;
                       } else if (code === 'PL') {
-                        cellBadge = <span className="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 font-bold flex items-center justify-center text-[11px]">PL</span>;
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-teal-100 text-teal-800 font-bold flex items-center justify-center text-[11px] border border-teal-200" title="Phép tang hoặc kết hôn">PL</span>;
                       } else if (code === 'PH') {
-                        cellBadge = <span className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-[11px]">PH</span>;
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-[11px] border border-amber-200" title="Nghỉ lễ (tự động)">PH</span>;
                       } else if (code === 'BT') {
                         cellBadge = <span className="w-7 h-7 rounded-lg bg-sky-100 text-sky-800 font-bold flex items-center justify-center text-[11px]">BT</span>;
+                      } else if (code === 'LA') {
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-orange-100 text-orange-800 font-bold flex items-center justify-center text-[11px] border border-orange-300 shadow-sm" title={cell?.violationNote || 'Đi trễ - Late arrival (<30p)'}>LA</span>;
+                      } else if (code === 'ED') {
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-orange-100 text-orange-800 font-bold flex items-center justify-center text-[11px] border border-orange-300 shadow-sm" title={cell?.violationNote || 'Về sớm - Early departure (<30p)'}>ED</span>;
+                      } else if (code === 'MCO') {
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-[10px] border border-rose-300" title={cell?.violationNote || 'Không chấm công ra - Missing clock-out'}>MCO</span>;
+                      } else if (code === 'MCI') {
+                        cellBadge = <span className="w-7 h-7 rounded-lg bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-[10px] border border-rose-300" title={cell?.violationNote || 'Không chấm công vào - Missing clock-in'}>MCI</span>;
                       } else if (code.includes('/2')) {
                         cellBadge = <span className="px-1 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold text-[9px] border border-blue-200">{code}</span>;
                       }
@@ -364,11 +383,19 @@ export const TimesheetCalendarPage: React.FC = () => {
             </p>
 
             <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
-              <div>Giờ vào: <b>{activeEditCell.cell.checkIn || 'Không có quẹt thẻ'}</b></div>
+              <div>Giờ vào: <b>{activeEditCell.cell.checkIn || 'Không có quẹt thẻ'}</b> {activeEditCell.cell.checkIn && activeEditCell.employee.shiftClassId && <span className="text-[10px] text-slate-400">(ca {activeEditCell.employee.shiftClassId})</span>}</div>
               <div>Giờ ra: <b>{activeEditCell.cell.checkOut || 'Không có quẹt thẻ'}</b></div>
               {activeEditCell.cell.lateMinutes ? (
-                <div className="text-amber-600">Đi trễ: <b>{activeEditCell.cell.lateMinutes} phút</b></div>
+                <div className="text-amber-600">Đi trễ: <b>{activeEditCell.cell.lateMinutes} phút</b> {activeEditCell.cell.lateMinutes >= 30 ? <span className="text-rose-600 font-bold">→ chờ duyệt phép</span> : '(LA)'}</div>
               ) : null}
+              {activeEditCell.cell.earlyMinutes ? (
+                <div className="text-orange-600">Về sớm: <b>{activeEditCell.cell.earlyMinutes} phút</b> {activeEditCell.cell.earlyMinutes >= 30 ? <span className="text-rose-600 font-bold">→ chờ duyệt phép</span> : '(ED)'}</div>
+              ) : null}
+              {activeEditCell.cell.violationNote && (
+                <div className="text-slate-600 italic text-[11px] border-t border-slate-200 pt-1 mt-1">{activeEditCell.cell.violationNote}</div>
+              )}
+              {activeEditCell.cell.statusCode === 'PL' && <div className="text-teal-700 text-[11px]">PL = Phép tang hoặc kết hôn</div>}
+              {activeEditCell.cell.statusCode === 'PH' && <div className="text-amber-700 text-[11px]">PH = Nghỉ lễ (tự động khi cả công ty nghỉ)</div>}
             </div>
 
             <div className="mt-4">
@@ -381,7 +408,12 @@ export const TimesheetCalendarPage: React.FC = () => {
                   { code: 'AL', label: 'AL: Phép năm' },
                   { code: 'UL', label: 'UL: Không lương' },
                   { code: 'SL', label: 'SL: Nghỉ ốm' },
-                  { code: 'PL', label: 'PL: Phép chế độ' },
+                  { code: 'PL', label: 'PL: Tang/Cưới' },
+                  { code: 'PH', label: 'PH: Nghỉ lễ' },
+                  { code: 'LA', label: 'LA: Đi trễ' },
+                  { code: 'ED', label: 'ED: Về sớm' },
+                  { code: 'MCO', label: 'MCO: Không ra' },
+                  { code: 'MCI', label: 'MCI: Không vào' },
                   { code: 'BT', label: 'BT: Công tác' },
                   { code: 'W/2 AL/2', label: 'W/2 AL/2: Nửa phép' },
                 ].map(item => (

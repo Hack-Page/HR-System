@@ -13,6 +13,11 @@ export interface ITimesheetSummary {
   lateEarlyMinutes: number;
   lateEarlyCount: number;
   missingPunchCount: number;
+  // Thống kê chi tiết vi phạm mới
+  lateArrivalCount: number;   // LA
+  earlyDepartureCount: number; // ED
+  missingClockOutCount: number; // MCO
+  missingClockInCount: number; // MCI
   diligenceBonus: number;
   productivityBonus: number;
   hazardousAllowance: number;
@@ -36,6 +41,10 @@ export function computeEmployeeTimesheetSummary(
 
   let lateEarlyMins = 0;
   let lateEarlyCnt = 0;
+  let lateArrivalCount = 0;
+  let earlyDepartureCount = 0;
+  let missingClockOutCount = 0;
+  let missingClockInCount = 0;
   let missingPunchCnt = 0;
 
   for (const cell of cells) {
@@ -48,9 +57,53 @@ export function computeEmployeeTimesheetSummary(
       lateEarlyMins += cell.earlyMinutes;
       lateEarlyCnt++;
     }
-    if (code === 'Off' || (cell.checkIn && !cell.checkOut) || (!cell.checkIn && cell.checkOut)) {
+    if (code === 'LA') {
+      lateArrivalCount++;
+    } else if (code === 'ED') {
+      earlyDepartureCount++;
+    } else if (code === 'MCO') {
+      missingClockOutCount++;
       missingPunchCnt++;
+    } else if (code === 'MCI') {
+      missingClockInCount++;
+      missingPunchCnt++;
+    } else if (code === 'Off') {
+      missingPunchCnt++;
+    } else {
+      // Fallback thiếu quẹt không có mã chuẩn nhưng có 1 bên quẹt
+      if (cell.checkIn && !cell.checkOut) {
+        missingClockOutCount++;
+        missingPunchCnt++;
+      } else if (!cell.checkIn && cell.checkOut) {
+        missingClockInCount++;
+        missingPunchCnt++;
+      }
     }
+  }
+  // Đồng bộ với bag (đảm bảo không lệch nếu cell mới thêm sau khi buildCountBag)
+  lateArrivalCount = Math.max(lateArrivalCount, bag.countLA);
+  earlyDepartureCount = Math.max(earlyDepartureCount, bag.countED);
+  // MCO/MCI từ bag có thể lớn hơn đã đếm nếu có cell Off/missing chưa qua loop MCO/MCI chuẩn
+  // Nếu bag có MCO/MCI nhiều hơn, bổ sung vào tổng missingPunchCnt
+  if (bag.countMCO > missingClockOutCount) {
+    const diff = bag.countMCO - missingClockOutCount;
+    missingClockOutCount = bag.countMCO;
+    missingPunchCnt += diff;
+  }
+  if (bag.countMCI > missingClockInCount) {
+    const diff = bag.countMCI - missingClockInCount;
+    missingClockInCount = bag.countMCI;
+    missingPunchCnt += diff;
+  }
+  // Off từ bag cũng cần đảm bảo missingPunchCnt không thấp hơn Off count (trường hợp Off không qua loop trên? nhưng đã qua)
+  if (bag.countOff > 0) {
+    // đếm lại Off chính xác từ bag nếu loop chưa đủ (ví dụ cell Off bị bỏ vì code !== Off? nhưng đã đếm)
+    // Đảm bảo tổng missingPunch không nhỏ hơn countOff + MCO+MCI
+    const expectedMin = bag.countOff + bag.countMCO + bag.countMCI;
+    // Nhưng loop đã đếm Off cho từng cell, nên nếu thiếu thì bù
+    let countedOff = 0;
+    for (const c of cells) if ((c.statusCode || '').trim() === 'Off') countedOff++;
+    if (countedOff < bag.countOff) missingPunchCnt += (bag.countOff - countedOff);
   }
 
   // Single source of truth via FORMULA_DEFS
@@ -97,6 +150,10 @@ export function computeEmployeeTimesheetSummary(
     lateEarlyMinutes: lateEarlyMins,
     lateEarlyCount: lateEarlyCnt,
     missingPunchCount: missingPunchCnt,
+    lateArrivalCount,
+    earlyDepartureCount,
+    missingClockOutCount,
+    missingClockInCount,
     diligenceBonus,
     productivityBonus,
     hazardousAllowance,

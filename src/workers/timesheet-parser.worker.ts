@@ -116,24 +116,53 @@ self.onmessage = async (e: MessageEvent<{ buffer: ArrayBuffer; month: number; ye
       };
       rawLogs.push(logItem);
 
-      // Determine timesheet status
+      // Determine timesheet status - cập nhật hỗ trợ LA/ED/MCO/MCI chuẩn theo yêu cầu
       let statusCode = '';
-      const isSunday = dayOfWeek === 'CN' || dayOfWeek.toLowerCase().includes('sun');
-      const isSaturday = dayOfWeek === 'Bảy' || dayOfWeek.toLowerCase().includes('sat');
+      const isSunday = dayOfWeek === 'CN' || dayOfWeek.toLowerCase().includes('sun') || dayOfWeek === 'Chủ nhật';
+      const isSaturday = dayOfWeek === 'Bảy' || dayOfWeek.toLowerCase().includes('sat') || dayOfWeek === 'Thứ 7';
 
       if (!checkIn && !checkOut) {
-        if (!isSunday && !isSaturday) {
-          statusCode = 'Off'; // Vắng mặt ngày thường -> Chờ bù phép
+        if (!isSunday) {
+          // Ngày thường không quẹt (kể cả Thứ 7) -> Off, sẽ được post-process thành PH nếu cả công ty nghỉ
+          statusCode = 'Off';
         } else {
-          statusCode = ''; // Nghỉ tuần
+          statusCode = ''; // CN nghỉ tuần
         }
+      } else if (!checkIn && checkOut) {
+        statusCode = 'MCI'; // Không chấm vào - Missing clock-in
+      } else if (checkIn && !checkOut) {
+        statusCode = 'MCO'; // Không chấm ra - Missing clock-out
       } else {
+        // Cả vào và ra đều có: kiểm tra ca đêm trước
         if (shift.includes('N') || shift.toLowerCase().includes('đêm') || (checkIn >= '18:00' || checkIn < '06:00')) {
           statusCode = 'N'; // Ca đêm
         } else {
-          statusCode = 'W'; // Đi làm đủ
+          // Giữ W mặc định; LA/ED sẽ được Header.tsx tinh chỉnh theo ca đã sắp (SHIFT_1 06:00, SHIFT_2 14:00, HC 07:30)
+          // Nếu file đã có lateMins/earlyMins <30p thì vẫn ưu tiên đánh LA/ED ngay tại worker để preview nhanh
+          if (lateMins > 0 && lateMins < 30) {
+            statusCode = 'LA';
+          } else if (earlyMins > 0 && earlyMins < 30) {
+            statusCode = 'ED';
+          } else if (lateMins >= 30) {
+            statusCode = 'LA'; // >=30 vẫn LA nhưng sẽ gắn cờ chờ duyệt phép ở post-process
+          } else if (earlyMins >= 30) {
+            statusCode = 'ED';
+          } else {
+            statusCode = 'W'; // Đi làm đủ
+          }
         }
       }
+
+      // Ghi chú chi tiết theo mã mới
+      let violationNote: string | undefined;
+      if (statusCode === 'MCI') violationNote = `Không chấm công vào (Missing clock-in) - ra lúc ${checkOut}`;
+      else if (statusCode === 'MCO') violationNote = `Không chấm công ra (Missing clock-out) - vào lúc ${checkIn}`;
+      else if (statusCode === 'LA') violationNote = lateMins > 0 ? `Đi trễ ${lateMins} phút (Late arrival)${lateMins >= 30 ? ' - trên 30 phút → chờ duyệt phép' : ''}` : 'Đi trễ (Late arrival)';
+      else if (statusCode === 'ED') violationNote = earlyMins > 0 ? `Về sớm ${earlyMins} phút (Early departure)${earlyMins >= 30 ? ' - trên 30 phút → chờ duyệt phép' : ''}` : 'Về sớm (Early departure)';
+      else if (lateMins > 0) violationNote = `Đi trễ ${lateMins} phút`;
+      else if (earlyMins > 0) violationNote = `Về sớm ${earlyMins} phút`;
+
+      const isViolation = statusCode === 'LA' || statusCode === 'ED' || statusCode === 'MCO' || statusCode === 'MCI' || lateMins > 0 || earlyMins > 0;
 
       const key = `${empId}_${dateStr}`;
       timesheetMap.set(key, {
@@ -146,8 +175,8 @@ self.onmessage = async (e: MessageEvent<{ buffer: ArrayBuffer; month: number; ye
         checkOut,
         lateMinutes: lateMins,
         earlyMinutes: earlyMins,
-        isViolation: lateMins > 0 || earlyMins > 0 || (!checkIn && !!checkOut) || (!!checkIn && !checkOut),
-        violationNote: lateMins > 0 ? `Đi trễ ${lateMins} phút` : (earlyMins > 0 ? `Về sớm ${earlyMins} phút` : undefined),
+        isViolation,
+        violationNote,
         calculatedOvertime: otHours,
         month,
         year

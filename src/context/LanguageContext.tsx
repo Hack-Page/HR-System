@@ -6,11 +6,12 @@ const DICTIONARY = {
     // Navigation
     dashboard: 'Tổng Quan Báo Cáo',
     employees: 'Danh Mục Nhân Viên',
-    timesheet: 'Bảng Chấm Công',
+    timesheet: 'Bảng chấm công',
     overtime: 'Quản Lý Tăng Ca',
     leavePending: 'Danh Sách Chờ Bù Phép',
     shiftRoster: 'Phân Ca & Xoay Ca',
     shiftAssignment: 'Sắp Xếp Ca Làm Việc',
+    attendanceViolation: 'Theo dõi Đi trễ/Về sớm',
     ocrVerification: 'Đối Soát OCR Phiếu Tăng Ca',
     settings: 'Cài Đặt & Phân Quyền',
     
@@ -87,6 +88,7 @@ const DICTIONARY = {
     leavePending: 'Pending Leave Compensation',
     shiftRoster: 'Shift Roster & Rotation',
     shiftAssignment: 'Shift Assignment',
+    attendanceViolation: 'Late/Early Tracking',
     ocrVerification: 'OCR Overtime Verification',
     settings: 'Settings & Dynamic RBAC',
     

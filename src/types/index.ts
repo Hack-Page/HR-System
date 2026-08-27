@@ -102,9 +102,13 @@ export type AttendanceStatusCode =
   | 'AL'        // Nghỉ phép năm
   | 'UL'        // Nghỉ không lương
   | 'SL'        // Nghỉ ốm / bệnh
-  | 'PL'        // Nghỉ phép chế độ có lương (tang, cưới)
-  | 'PH'        // Nghỉ lễ
+  | 'PL'        // Nghỉ phép tang hoặc kết hôn (chế độ có lương) - PL: Bereavement/Marriage leave
+  | 'PH'        // Nghỉ lễ - tự động điền khi cả công ty không đi (ngày thường không chấm công trừ CN)
   | 'BT'        // Công tác
+  | 'LA'        // Đi làm trễ <30 phút - Late Arrival (phụ thuộc ca sắp xếp; >=30 phút → chờ duyệt phép)
+  | 'ED'        // Về sớm <30 phút - Early Departure (tương tự LA)
+  | 'MCO'       // Không chấm công ra - Missing clock-out (có vào, thiếu ra)
+  | 'MCI'       // Không chấm công vào - Missing clock-in (có ra, thiếu vào)
   | 'W/2 AL/2'  // Nửa ngày làm, nửa ngày phép
   | 'W/2 UL/2'  // Nửa ngày làm, nửa ngày không lương
   | 'AL/2 UL/2' // Nửa ngày phép, nửa ngày không lương

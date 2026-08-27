@@ -101,7 +101,9 @@ export const Header: React.FC = () => {
       workerRef.current = worker;
 
       // Dữ liệu nạp vào kỳ hiện tại thay vì tháng cứng
-      worker.postMessage({ buffer, month: now.getMonth() + 1, year: now.getFullYear() });
+      const importMonth = now.getMonth() + 1;
+      const importYear = now.getFullYear();
+      worker.postMessage({ buffer, month: importMonth, year: importYear });
 
       worker.onmessage = async (event) => {
         const msg = event.data;
@@ -109,24 +111,219 @@ export const Header: React.FC = () => {
           setImportProgress(msg.progress);
           setImportStatusText(msg.message);
         } else if (msg.type === 'COMPLETE') {
+          setImportStatusText('Đang đối chiếu mã NV, ca làm việc và ngày nghỉ lễ...');
+
+          // === POST-PROCESS: mã NV khớp danh mục + shift-based LA/ED/MCO/MCI + PH tự động ===
+          let postTimesheets: any[] = Array.isArray(msg.timesheets) ? [...msg.timesheets] : [];
+          let postRawLogs: any[] = Array.isArray(msg.rawLogs) ? [...msg.rawLogs] : [];
+          const postOvertimes: any[] = Array.isArray(msg.overtimes) ? [...msg.overtimes] : [];
+          try {
+            const employees = await db.employees.toArray();
+            const shiftRosters = await db.shiftRosters.toArray();
+            const empMap = new Map<string, any>(employees.map((e: any) => [e.employeeId, e]));
+            const erpMap = new Map<string, any>(employees.filter((e: any) => e.erpId).map((e: any) => [e.erpId!, e]));
+            const shiftMap = new Map<string, any>(shiftRosters.map((r: any) => [r.employeeId_date, r]));
+
+            const parseTimeToMinutes = (t: string): number | null => {
+              if (!t || typeof t !== 'string') return null;
+              const p = t.trim().split(':');
+              if (p.length < 2) return null;
+              const h = parseInt(p[0], 10);
+              const m = parseInt(p[1], 10);
+              if (isNaN(h) || isNaN(m)) return null;
+              return h * 60 + m;
+            };
+            const getShiftTimes = (empId: string, dateStr: string): { start: string; end: string } => {
+              const key = `${empId}_${dateStr}`;
+              const roster = shiftMap.get(key);
+              if (roster && roster.startTime && roster.endTime) return { start: roster.startTime, end: roster.endTime };
+              const emp = empMap.get(empId);
+              if (emp) {
+                const sc = emp.shiftClassId as string;
+                if (sc === 'SHIFT_1') return { start: '06:00', end: '14:00' };
+                if (sc === 'SHIFT_2') return { start: '14:00', end: '22:00' };
+                // HC hoặc không xác định -> mặc định hành chính 07:30-16:00 T2-T7
+                return { start: '07:30', end: '16:00' };
+              }
+              // Không tìm thấy NV -> mặc định HC
+              return { start: '07:30', end: '16:00' };
+            };
+
+            // 1. Chuẩn hoá mã NV: nếu mã trong file là erpId thì map về employeeId chính
+            const unknownIds = new Set<string>();
+            const remappedTimesheets: any[] = [];
+            for (const ts of postTimesheets) {
+              let empId = String(ts.employeeId || '').trim();
+              if (!empMap.has(empId) && erpMap.has(empId)) {
+                const mapped = erpMap.get(empId);
+                empId = mapped.employeeId;
+                ts.employeeId = empId;
+                ts.employeeId_date = `${empId}_${ts.date}`;
+              }
+              if (!empMap.has(empId)) {
+                unknownIds.add(empId);
+                // vẫn giữ để không mất dữ liệu, nhưng sẽ cảnh báo
+              }
+              remappedTimesheets.push(ts);
+            }
+            postTimesheets = remappedTimesheets;
+            // rawLogs tương tự
+            const remappedRawLogs: any[] = [];
+            for (const lg of postRawLogs) {
+              let empId = String(lg.employeeId || '').trim();
+              if (!empMap.has(empId) && erpMap.has(empId)) {
+                empId = erpMap.get(empId).employeeId;
+                lg.employeeId = empId;
+              }
+              if (!empMap.has(empId)) unknownIds.add(empId);
+              remappedRawLogs.push(lg);
+            }
+            postRawLogs = remappedRawLogs;
+            if (unknownIds.size > 0) {
+              warning('Mã NV không khớp danh mục', `Có ${unknownIds.size} mã trong file chấm công không tồn tại trong Danh mục Nhân viên: ${Array.from(unknownIds).slice(0,5).join(', ')}${unknownIds.size>5?'...':''}. Yêu cầu: mã trong hệ thống quẹt thẻ phải khớp mã Danh mục nhân viên. Các dòng này vẫn được nạp nhưng cần rà soát.`);
+            }
+
+            // 2. Tinh chỉnh LA/ED theo ca đã sắp xếp (áp dụng ngưỡng 30 phút)
+            for (const ts of postTimesheets) {
+              const checkIn = String(ts.checkIn || '').trim();
+              const checkOut = String(ts.checkOut || '').trim();
+              // MCO/MCI đã đúng ở worker, bỏ qua tinh chỉnh nếu thiếu một bên
+              if (!checkIn || !checkOut) continue;
+              // Chỉ tinh chỉnh nếu đang là W/N hoặc LA/ED cần cập nhật lại theo ca thực tế
+              const { start, end } = getShiftTimes(ts.employeeId, ts.date);
+              const inMins = parseTimeToMinutes(checkIn);
+              const outMins = parseTimeToMinutes(checkOut);
+              const startMins = parseTimeToMinutes(start);
+              const endMins = parseTimeToMinutes(end);
+              let late = 0;
+              let early = 0;
+              if (inMins !== null && startMins !== null && inMins > startMins) late = inMins - startMins;
+              if (outMins !== null && endMins !== null && outMins < endMins) early = endMins - outMins;
+              // Cập nhật phút trễ/sớm thực tế theo ca
+              if (late !== ts.lateMinutes || early !== ts.earlyMinutes) {
+                ts.lateMinutes = late;
+                ts.earlyMinutes = early;
+              }
+              // Xác định mã LA/ED theo ngưỡng 30 phút
+              if (late > 0 && late < 30) {
+                ts.statusCode = 'LA';
+                ts.isViolation = true;
+                ts.violationNote = `Đi làm trễ ${late} phút (Late arrival) - ca ${start} | vào ${checkIn}`;
+              } else if (late >= 30) {
+                ts.statusCode = 'LA';
+                ts.isViolation = true;
+                ts.violationNote = `Đi làm trễ ${late} phút (Late arrival) - trên 30 phút → chờ duyệt phép - ca ${start} | vào ${checkIn}`;
+              } else if (early > 0 && early < 30) {
+                ts.statusCode = 'ED';
+                ts.isViolation = true;
+                ts.violationNote = `Về sớm ${early} phút (Early departure) - ca ${end} | ra ${checkOut}`;
+              } else if (early >= 30) {
+                ts.statusCode = 'ED';
+                ts.isViolation = true;
+                ts.violationNote = `Về sớm ${early} phút (Early departure) - trên 30 phút → chờ duyệt phép - ca ${end} | ra ${checkOut}`;
+              } else {
+                // Không trễ sớm -> giữ W/N nhưng nếu đang là LA/ED do file cũ thì chuyển về W
+                if (ts.statusCode === 'LA' || ts.statusCode === 'ED') {
+                  // kiểm tra ca đêm: nếu ca đêm thì N
+                  const shift = start === '14:00' ? 'N' : 'W';
+                  // Giữ N nếu trước đó là N
+                  if (ts.statusCode === 'N') ts.statusCode = 'N';
+                  else ts.statusCode = 'W';
+                  ts.violationNote = undefined;
+                  ts.isViolation = false;
+                }
+              }
+            }
+
+            // 3. PH tự động: ngày thường (T2-T7, trừ CN) không có quẹt thẻ nào trên toàn công ty -> PH cho tất cả
+            const y = (msg.year as number) || importYear;
+            const m = (msg.month as number) || importMonth;
+            const daysInMonth = new Date(y, m, 0).getDate();
+            const hasPunchByDate = new Map<string, boolean>();
+            for (const lg of postRawLogs) {
+              if ((lg.checkIn && String(lg.checkIn).trim() !== '') || (lg.checkOut && String(lg.checkOut).trim() !== '')) {
+                hasPunchByDate.set(lg.date, true);
+              }
+            }
+            // cũng kiểm tra timesheets đã có checkIn/checkOut
+            for (const ts of postTimesheets) {
+              if ((ts.checkIn && String(ts.checkIn).trim() !== '') || (ts.checkOut && String(ts.checkOut).trim() !== '')) {
+                hasPunchByDate.set(ts.date, true);
+              }
+            }
+            const holidayDates: string[] = [];
+            for (let d = 1; d <= daysInMonth; d++) {
+              const dateObj = new Date(y, m - 1, d);
+              const w = dateObj.getDay(); // 0 CN
+              if (w === 0) continue; // bỏ qua Chủ nhật
+              const dateStr = `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+              if (!hasPunchByDate.get(dateStr)) {
+                holidayDates.push(dateStr);
+              }
+            }
+            if (holidayDates.length > 0) {
+              const existingKeys = new Set(postTimesheets.map((ts: any) => ts.employeeId_date));
+              let phCreated = 0;
+              for (const dateStr of holidayDates) {
+                const dNum = parseInt(dateStr.split('-')[2], 10);
+                for (const emp of employees) {
+                  const key = `${emp.employeeId}_${dateStr}`;
+                  if (existingKeys.has(key)) {
+                    // Nếu đã có ô Off trống thì chuyển thành PH
+                    const existing = postTimesheets.find((t: any) => t.employeeId_date === key);
+                    if (existing && existing.statusCode === 'Off' && !existing.checkIn && !existing.checkOut) {
+                      existing.statusCode = 'PH';
+                      existing.violationNote = 'Nghỉ lễ - cả công ty nghỉ (tự động - ngày thường không có quẹt thẻ)';
+                      existing.isViolation = false;
+                    }
+                  } else {
+                    postTimesheets.push({
+                      employeeId_date: key,
+                      employeeId: emp.employeeId,
+                      date: dateStr,
+                      dayIndex: dNum,
+                      statusCode: 'PH',
+                      checkIn: '',
+                      checkOut: '',
+                      lateMinutes: 0,
+                      earlyMinutes: 0,
+                      isViolation: false,
+                      violationNote: 'Nghỉ lễ - cả công ty nghỉ (tự động)',
+                      calculatedOvertime: 0,
+                      month: m,
+                      year: y
+                    });
+                    phCreated++;
+                  }
+                }
+              }
+              if (phCreated > 0) {
+                info('Tự động điền PH', `Đã tự động điền ${phCreated} ô PH (nghỉ lễ) cho ${holidayDates.length} ngày cả công ty nghỉ: ${holidayDates.join(', ')}`);
+              }
+            }
+          } catch (postErr: any) {
+            console.error('Post-process timesheet error:', postErr);
+            warning('Lưu ý xử lý hậu kỳ', postErr.message || 'Lỗi khi đối chiếu ca/phép, vẫn tiến hành lưu dữ liệu gốc.');
+          }
+
           setImportStatusText('Đang lưu vào cơ sở dữ liệu Dexie.js (IndexedDB)...');
 
           // Bulk put to Dexie.js
-          if (msg.timesheets && msg.timesheets.length > 0) {
-            await db.dailyTimesheets.bulkPut(msg.timesheets);
+          if (postTimesheets && postTimesheets.length > 0) {
+            await db.dailyTimesheets.bulkPut(postTimesheets);
           }
-          if (msg.overtimes && msg.overtimes.length > 0) {
-            await db.overtimeRecords.bulkPut(msg.overtimes);
+          if (postOvertimes && postOvertimes.length > 0) {
+            await db.overtimeRecords.bulkPut(postOvertimes);
           }
-          if (msg.rawLogs && msg.rawLogs.length > 0) {
+          if (postRawLogs && postRawLogs.length > 0) {
             await db.rawAttendanceLogs.clear();
-            await db.rawAttendanceLogs.bulkAdd(msg.rawLogs);
+            await db.rawAttendanceLogs.bulkAdd(postRawLogs);
           }
 
           setIsImporting(false);
           success(
             'Nạp dữ liệu chấm công thành công!',
-            `Đã phân tích ${msg.rawLogsCount.toLocaleString()} dòng quẹt thẻ và cập nhật ${msg.timesheetCellsCount.toLocaleString()} ô công.`
+            `Đã phân tích ${postRawLogs.length.toLocaleString()} dòng quẹt thẻ và cập nhật ${postTimesheets.length.toLocaleString()} ô công (đã đối chiếu mã NV, ca làm việc & PH tự động).`
           );
           worker.terminate();
           workerRef.current = null;
