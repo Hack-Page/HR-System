@@ -217,8 +217,24 @@ interface GridCellRef {
  *  - Gán từng ô của các dòng sau vào cột theo khoảng x của header
  *  - Không có header thì phân loại theo nội dung từng ô (heuristic, người dùng kiểm tra lại)
  */
+// Cache cho mapGridToTableRows để tránh tính lại khi grid trùng (tăng tốc, áp dụng cho toàn hệ thống chống lag)
+const _gridCache = new Map<string, IMappedTableRow[]>();
+const _gridCacheMax = 50;
+function _gridKey(grid: OcrTableGrid): string {
+  // Key nhẹ: số dòng + hash text ngắn (không dùng JSON.stringify toàn bộ để tránh nặng)
+  let h = `${grid.rows.length}`;
+  for (const r of grid.rows) {
+    for (const c of r.cells) h += `|${c.text.slice(0,12)}:${Math.round(c.confidence*100)}`;
+    if (h.length > 2000) break;
+  }
+  return h;
+}
+
 export function mapGridToTableRows(grid: OcrTableGrid): IMappedTableRow[] {
   if (grid.rows.length === 0) return [];
+  const key = _gridKey(grid);
+  const cached = _gridCache.get(key);
+  if (cached) return cached;
 
   // 1. Tìm dòng header: hàng nhiều từ khoá cột nhất
   let headerIdx = -1;
@@ -269,7 +285,7 @@ export function mapGridToTableRows(grid: OcrTableGrid): IMappedTableRow[] {
       }
       mapped.push(accumulateToRow(acc));
     }
-  } else {
+    } else {
     // Không tìm thấy header: xếp hạng theo nội dung
     for (const { row } of meaningful) {
       const acc: Record<string, GridCellRef[]> = {};
@@ -284,6 +300,12 @@ export function mapGridToTableRows(grid: OcrTableGrid): IMappedTableRow[] {
     }
   }
 
+  // Lưu cache vĩnh viễn cho grid đã tính (không áp dụng cho dữ liệu động liên tục như DB, chỉ cho OCR grid)
+  if (_gridCache.size >= _gridCacheMax) {
+    const firstKey = _gridCache.keys().next().value;
+    if (firstKey) _gridCache.delete(firstKey);
+  }
+  _gridCache.set(key, mapped);
   return mapped;
 }
 

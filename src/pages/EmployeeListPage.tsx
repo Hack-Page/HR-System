@@ -34,6 +34,10 @@ export const EmployeeListPage: React.FC = () => {
 
   // Modal form states
   const [editingEmployee, setEditingEmployee] = useState<IEmployee | null>(null);
+  const [showAddDept, setShowAddDept] = useState(false);
+  const [newDeptName, setNewDeptName] = useState('');
+  const [showAddPos, setShowAddPos] = useState(false);
+  const [newPosName, setNewPosName] = useState('');
 
   // Query live employees
   const rawEmployees = useLiveQuery(() => db.employees.toArray(), []) || [];
@@ -390,24 +394,138 @@ export const EmployeeListPage: React.FC = () => {
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Phòng Ban (Department)</label>
-                  <input
-                    type="text"
-                    value={editingEmployee.department}
-                    onChange={(e) => setEditingEmployee({ ...editingEmployee, department: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
-                  />
+                  {showAddDept ? (
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        value={newDeptName}
+                        onChange={(e) => setNewDeptName(e.target.value)}
+                        placeholder="Tên phòng ban mới"
+                        className="flex-1 px-3 py-2 bg-white border border-orange-300 rounded-xl focus:outline-none focus:border-orange-500"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const trimmed = newDeptName.trim();
+                          if (trimmed) {
+                            setEditingEmployee({ ...editingEmployee, department: trimmed });
+                            setShowAddDept(false);
+                            setNewDeptName('');
+                            success('Đã thêm phòng ban', `"${trimmed}" sẽ xuất hiện trong danh sách và đồng bộ toàn hệ thống.`);
+                          }
+                        }}
+                        className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold"
+                      >
+                        Lưu
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowAddDept(false); setNewDeptName(''); }}
+                        className="px-2.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl"
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                  ) : (
+                    (() => {
+                      const deptOptions = Array.from(new Set([
+                        ...(['Finance','EHS','Logistics','WH','Production','QC','Maintenance (PRO)','Purchasing','Admin','HR'] as const),
+                        ...rawEmployees.map(e => e.department).filter(Boolean) as string[],
+                        ...(editingEmployee.department && !(['Finance','EHS','Logistics','WH','Production','QC','Maintenance (PRO)','Purchasing','Admin','HR'].includes(editingEmployee.department) || rawEmployees.some(e => e.department === editingEmployee.department)) ? [] : editingEmployee.department ? [editingEmployee.department] : [])
+                      ]));
+                      const uniqueDepts = Array.from(new Set(deptOptions)).sort();
+                      return (
+                        <div className="flex gap-1">
+                          <select
+                            value={editingEmployee.department}
+                            onChange={(e) => setEditingEmployee({ ...editingEmployee, department: e.target.value })}
+                            className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
+                          >
+                            <option value="">-- Chọn phòng ban --</option>
+                            {uniqueDepts.map(d => (
+                              <option key={d} value={d}>{d}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddDept(true)}
+                            className="px-2.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl flex items-center justify-center shrink-0"
+                            title="Thêm phòng ban mới"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })()
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Chức Vụ (Position)</label>
-                  <input
-                    type="text"
-                    value={editingEmployee.position}
-                    onChange={(e) => setEditingEmployee({ ...editingEmployee, position: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
-                  />
+                  {showAddPos ? (
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        value={newPosName}
+                        onChange={(e) => setNewPosName(e.target.value)}
+                        placeholder="Tên chức vụ mới"
+                        className="flex-1 px-3 py-2 bg-white border border-orange-300 rounded-xl focus:outline-none focus:border-orange-500"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const trimmed = newPosName.trim();
+                          if (trimmed) {
+                            setEditingEmployee({ ...editingEmployee, position: trimmed });
+                            setShowAddPos(false);
+                            setNewPosName('');
+                            success('Đã thêm chức vụ', `"${trimmed}" sẽ xuất hiện trong danh sách và đồng bộ toàn hệ thống.`);
+                          }
+                        }}
+                        className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold"
+                      >
+                        Lưu
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowAddPos(false); setNewPosName(''); }}
+                        className="px-2.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl"
+                      >
+                        Hủy
+                      </button>
+                    </div>
+                  ) : (
+                    (() => {
+                      const posOptions = Array.from(new Set(rawEmployees.map(e => e.position).filter(Boolean) as string[])).sort();
+                      const allPos = editingEmployee.position && !posOptions.includes(editingEmployee.position) ? [...posOptions, editingEmployee.position] : posOptions;
+                      return (
+                        <div className="flex gap-1">
+                          <select
+                            value={editingEmployee.position}
+                            onChange={(e) => setEditingEmployee({ ...editingEmployee, position: e.target.value })}
+                            className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
+                          >
+                            <option value="">-- Chọn chức vụ --</option>
+                            {allPos.map(p => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddPos(true)}
+                            className="px-2.5 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl flex items-center justify-center shrink-0"
+                            title="Thêm chức vụ mới"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })()
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Ngày Bắt Đầu Làm Việc</label>

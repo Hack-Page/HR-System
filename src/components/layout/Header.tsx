@@ -3,7 +3,6 @@ import {
   Upload,
   Download,
   Globe,
-  Search,
   CheckCircle2,
   Loader2,
   FileSpreadsheet,
@@ -137,20 +136,14 @@ export const Header: React.FC = () => {
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-      {/* Left: Search Bar & Toggle (Figma Spec) */}
+      {/* Left: Logo Leggett & Platt duy nhất - dời từ Sidebar S + SmartHR lên đây, xóa thanh tìm kiếm */}
       <div className="flex items-center gap-4 flex-1 max-w-lg">
-        {/* Search Bar */}
-        <div className="relative flex-1 hidden md:block">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder={t('searchPlaceholder')}
-            className="w-full pl-9 pr-16 py-2 bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl text-xs transition focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-          />
-          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-slate-200/80 text-slate-500 text-[10px] font-bold rounded">
-            CTRL + /
-          </kbd>
-        </div>
+        <img
+          src="/Leggett.jpg"
+          alt="Leggett & Platt HOME FURNITURE"
+          className="h-9 w-auto object-contain max-w-[260px]"
+          loading="eager"
+        />
       </div>
 
       {/* Right: Actions, Import/Export, Language & Role Switcher */}
@@ -164,13 +157,13 @@ export const Header: React.FC = () => {
           className="hidden"
         />
 
-        {/* Import Button */}
+        {/* Import Button - đã đổi thành Nạp dữ liệu chấm công */}
         {hasPermission('IMPORT_LOGS') && (
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isImporting}
             className="flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition shadow-sm disabled:opacity-60"
-            title="Nạp file chấm công 2107-20082026.xlsx (>19k dòng)"
+            title="Nạp dữ liệu chấm công"
           >
             {isImporting ? (
               <Loader2 className="w-4 h-4 animate-spin text-orange-500" />

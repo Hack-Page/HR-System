@@ -15,6 +15,8 @@
 ### Principle 2: Clarification Before Implementation (Hỏi rõ khi chưa đủ sự kiện)
 - **Do Not Code on Ambiguity**: Nếu một yêu cầu còn mơ hồ hoặc có nhiều phương án xử lý xung đột, agent phải dừng lại và đưa ra câu hỏi làm rõ cùng các lựa chọn khuyến nghị.
 - **Fact-Based Execution**: Chỉ bắt đầu viết code khi các thông tin đầu vào, format dữ liệu, và luồng trạng thái đã được xác định 100% rõ ràng.
+- **Mandatory Rule 1 – Hỏi Lại Khi Chưa Chắc Chắn**: Mọi logic chưa chuẩn, thông tin chưa đủ hoặc chưa rõ ràng BẮT BUỘC phải hỏi lại người dùng trước khi code. Tuyệt đối không tự ý bịa code, giả định kết quả, hay suy diễn nghiệp vụ.
+- **Mandatory Rule 2 – Không Bịa Kết Quả & Không Giả Định**: Không tự tạo dữ liệu mẫu, không giả định mã ca, bộ phận, quyền role, hay luồng đồng bộ nếu chưa được xác nhận bằng chứng từ file/DB/schema. Mọi kết quả phải có nguồn đối chiếu.
 
 ### Principle 3: Single-File In-Browser Backend Integrity (Kiến trúc chuẩn Local-First)
 - **100% Client-Side Independence**: Toàn bộ hệ thống chạy độc lập trên trình duyệt người dùng mà không phụ thuộc vào server-side API truyền thống.

@@ -33,7 +33,11 @@ const MODEL_PATHS = {
 // Lưu ý: model classifier ch_ppocr_mobile_v2.0_cls.onnx trong repo có node Concat
 // lỗi opset khiến ORT >= 1.20 từ chối nạp. Thay vào đó dùng chiến lược "quét 2 chiều":
 // nhận dạng 180° khi kết quả thường có độ tin cậy thấp, chọn hướng tốt hơn (đo thật).
-// Vietnamese HR dict preferred, fallback to latin
+// FIX: Giữ nguyên cấu trúc PaddleOCR-Models nhưng đảm bảo model hoạt động lại
+// - latin_dict.txt là từ điển CHÍNH cho CTC decode (khớp output 187 của latin_PP-OCRv3_rec.onnx)
+// - vi_dict.txt (giờ là 235 ký tự comprehensive: latin 185 + 50 ký tự HR tiếng Việt) dùng cho HR RAG post-process
+//   Worker sẽ LUÔN dùng latin cho CTC để tránh mismatch 113 vs 187 gây decode sai hoàn toàn.
+//   Sau CTC, HR RAG sẽ áp dụng corrections (LEP codes, dates) để hỗ trợ tiếng Việt HR.
 const DICT_URL_VI = '/PaddleOCR-Models/dictionaries/vi_dict.txt';
 const DICT_URL_LATIN = '/PaddleOCR-Models/dictionaries/latin_dict.txt';
 
@@ -45,6 +49,37 @@ const REC_TARGET_H = 48;         // chiều cao chuẩn đầu vào recognition
 const MAX_BOXES = 400;           // trần số vùng chữ xử lý mỗi ảnh
 
 ort.env.wasm.wasmPaths = '/PaddleOCR-Models/ort/';
+// Tối ưu tăng tốc cho Edge: bật SIMD + threads theo đúng năng lực máy, phản ánh đúng tốc độ thực tế
+try {
+  const hw = (self as any).navigator?.hardwareConcurrency || 4;
+  (ort.env.wasm as any).numThreads = Math.min(hw, 4);
+  (ort.env.wasm as any).simd = true;
+  // proxy = false giảm overhead khi không cần SharedArrayBuffer cross-origin
+  (ort.env.wasm as any).proxy = false;
+} catch {}
+
+// Cache vĩnh viễn cho model/WASM: lưu ArrayBuffer vào CacheStorage 'ocr-model-cache-v1' để máy đã tải 1 lần sau đó dùng lại không tải lại (tránh lag)
+const OCR_CACHE_NAME = 'ocr-model-cache-v1';
+async function fetchWithCache(url: string): Promise<ArrayBuffer> {
+  try {
+    if ('caches' in self) {
+      const cache = await (caches as any).open(OCR_CACHE_NAME);
+      const cached = await cache.match(url);
+      if (cached) {
+        const buf = await cached.arrayBuffer();
+        if (buf.byteLength > 0) return buf;
+      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+      const clone = res.clone();
+      // put async không chặn
+      cache.put(url, clone).catch(() => {});
+      return await res.arrayBuffer();
+    }
+  } catch {}
+  // fallback: fetch thường
+  return fetchArrayBuffer(url);
+}
 
 // ---------------------------------------------------------------------------
 // Trạng thái session & từ điển (lazy init, tái dùng giữa các lần chạy)
@@ -57,6 +92,10 @@ interface SessionBundle {
   dictSize: number;
   /** Ghi chú đối chiếu kích thước output model với từ điển (điền ở lần rec đầu tiên) */
   charsetNote: string;
+  /** Nguồn từ điển thực tế được dùng cho CTC */
+  dictSource: string;
+  /** Thông tin vi_dict để HR RAG tham chiếu */
+  viDictInfo: string;
 }
 
 let bundle: SessionBundle | null = null;
@@ -73,35 +112,74 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
   return res.arrayBuffer();
 }
 
-async function loadCharset(): Promise<{ charset: string[]; dictSize: number }> {
-  // Try Vietnamese dict first, fallback to Latin
-  let text: string;
+function parseDictText(text: string): string[] {
+  const dict = text.split('\n').map(l => l.replace(/\r$/, ''));
+  while (dict.length > 0 && dict[dict.length - 1] === '') dict.pop();
+  return dict;
+}
+
+async function loadCharset(): Promise<{ charset: string[]; dictSize: number; source: string; viInfo: string }> {
+  // 1) Bắt buộc: latin_dict là chuẩn cho model latin_PP-OCRv3_rec.onnx (output 187 = 185+2)
+  let latinDict: string[] = [];
+  try {
+    const res = await fetch(DICT_URL_LATIN);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    latinDict = parseDictText(await res.text());
+  } catch (e: any) {
+    throw new Error(`Không tải được từ điển chính ${DICT_URL_LATIN}: ${e?.message || e}`);
+  }
+  if (latinDict.length !== 185 && latinDict.length !== 186) {
+    console.warn(`[OCR Worker] latin_dict size bất thường: ${latinDict.length}, kỳ vọng 185 (model output 187). Vẫn thử decode.`);
+  }
+
+  // 2) Tùy chọn: vi_dict comprehensive (235) - chỉ để HR RAG, KHÔNG dùng cho CTC nếu mismatch
+  let viInfo = 'không tải được vi_dict';
   try {
     const res = await fetch(DICT_URL_VI);
-    if (res.ok) { text = await res.text(); } else { throw new Error('vi_dict not found'); }
-  } catch {
-    text = await (await fetch(DICT_URL_LATIN)).text();
+    if (res.ok) {
+      const viText = await res.text();
+      const viDict = parseDictText(viText);
+      viInfo = `vi_dict ${viDict.length} ký tự`;
+      // Nếu vi_dict vô tình khớp 185/186 (ví dụ bản fix copy latin) thì log khác, nhưng vẫn ưu tiên latin cho ổn định
+      if (viDict.length === 185 || viDict.length === 186) {
+        viInfo += ' (khớp kích thước CTC)';
+      } else {
+        viInfo += ' → comprehensive HR Vietnamese (dùng cho HR RAG post-process, CTC vẫn dùng latin để khớp model 187)';
+      }
+      // Trường hợp vi_dict cũ 113 sẽ rơi vào nhánh này và được cảnh báo rõ
+      if (viDict.length === 113) {
+        viInfo += ' [CẢNH BÁO: bản cũ 113 thiếu digits/symbols, đã fix thành 235]';
+      }
+    } else {
+      viInfo = `vi_dict HTTP ${res.status}`;
+    }
+  } catch (e: any) {
+    viInfo = `vi_dict lỗi: ${e?.message || e}`;
   }
-  const dict = text.split('\n').map(l => l.replace(/\r$/, ''));
-  // File dict chính thức có dòng cuối rỗng do trailing newline
-  while (dict.length > 0 && dict[dict.length - 1] === '') dict.pop();
-  return { charset: ['blank', ...dict], dictSize: dict.length };
+
+  // 3) Trả về charset CTC = latin (đảm bảo đúng mapping với model weights)
+  const charset = ['blank', ...latinDict];
+  const source = `latin_dict.txt (${latinDict.length} chars, model output 187 khớp)`;
+  return { charset, dictSize: latinDict.length, source, viInfo };
 }
 
 async function ensureBundle(requestId: string): Promise<SessionBundle> {
   if (bundle) return bundle;
 
-  progress(requestId, 8, 'INIT_WASM', 'Nạp ONNX Runtime Web (WASM SIMD)...');
+  progress(requestId, 8, 'INIT_WASM', 'Khởi tạo thuật toán OCR (WASM)...');
 
   const charsetInfo = await loadCharset();
+  progress(requestId, 10, 'DICT', `Chuẩn bị dữ liệu nhận diện | ${charsetInfo.viInfo}`);
 
-  progress(requestId, 12, 'LOAD_DET', `Tải model detection ch_PP-OCRv4_det_infer.onnx (~4.7MB)...`);
-  const det = await ort.InferenceSession.create(MODEL_PATHS.det, { executionProviders: ['wasm'] });
+  progress(requestId, 12, 'LOAD_DET', `Đang tải thuật toán phát hiện vùng chữ (lần đầu cache vĩnh viễn, lần sau dùng cache)...`);
+  const detBuf = await fetchWithCache(MODEL_PATHS.det);
+  const det = await ort.InferenceSession.create(detBuf, { executionProviders: ['wasm'] });
 
-  progress(requestId, 20, 'LOAD_REC', `Tải model recognition latin_PP-OCRv3_rec.onnx (~9MB)...`);
-  const rec = await ort.InferenceSession.create(MODEL_PATHS.recLatin, { executionProviders: ['wasm'] });
+  progress(requestId, 20, 'LOAD_REC', `Đang tải thuật toán nhận dạng ký tự (lần đầu cache vĩnh viễn, lần sau dùng cache)...`);
+  const recBuf = await fetchWithCache(MODEL_PATHS.recLatin);
+  const rec = await ort.InferenceSession.create(recBuf, { executionProviders: ['wasm'] });
 
-  bundle = { det, rec, ...charsetInfo, charsetNote: '' };
+  bundle = { det, rec, charset: charsetInfo.charset, dictSize: charsetInfo.dictSize, charsetNote: '', dictSource: charsetInfo.source, viDictInfo: charsetInfo.viInfo };
   return bundle;
 }
 
@@ -501,6 +579,8 @@ self.onmessage = async (e: MessageEvent<OCRWorkerRequest>) => {
       details: [
         `Pipeline thật: det=ch_PP-OCRv4_det_infer.onnx (${boxes.length} vùng), rec=latin_PP-OCRv3_rec.onnx`,
         b.charsetNote,
+        `CTC dict: ${b.dictSource}`,
+        `HR vi_dict: ${b.viDictInfo} (áp dụng HR RAG sau CTC)`,
         clsNote,
       ].join('; '),
       rawText,

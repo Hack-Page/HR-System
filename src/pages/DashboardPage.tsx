@@ -24,11 +24,14 @@ import {
   Download,
   Plus,
   MoreVertical,
-  SlidersHorizontal
+  SlidersHorizontal,
+  LogIn,
+  LogOut
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { NavPageId } from '../components/layout/Sidebar';
 
 interface DashboardPageProps {
@@ -36,7 +39,8 @@ interface DashboardPageProps {
 }
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const { session } = useAuth();
 
   // Query live data from Dexie.js
   const employees = useLiveQuery(() => db.employees.toArray(), []) || [];
@@ -45,7 +49,27 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const overtimes = useLiveQuery(() => db.overtimeRecords.toArray(), []) || [];
   const leaveRequests = useLiveQuery(() => db.leaveRequests.toArray(), []) || [];
 
-  // Compute all Dashboard Metrics - No fallback inflation, show true data with EmptyState
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+
+  // Helper parse DD/MM/YYYY or YYYY-MM-DD
+  const parseDate = (s?: string): Date | null => {
+    if (!s) return null;
+    if (s.includes('/')) {
+      const [d,m,y] = s.split('/').map(Number);
+      if (!d || !m || !y) return null;
+      return new Date(y, m-1, d);
+    }
+    if (s.includes('-')) {
+      const [y,m,d] = s.split('-').map(Number);
+      if (!y || !m || !d) return null;
+      return new Date(y, m-1, d);
+    }
+    return null;
+  };
+
+  // Compute all Dashboard Metrics - 8 KPI mới
   const stats = useMemo(() => {
     const total = employees.length;
     const official = employees.filter(e => e.contractType === 'OFFICIAL').length;
@@ -53,86 +77,140 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
     const shift1 = employees.filter(e => e.shiftClassId === 'SHIFT_1').length;
     const shift2 = employees.filter(e => e.shiftClassId === 'SHIFT_2').length;
-    const office = employees.filter(e => e.shiftClassId === 'OFFICE_M_F' || e.shiftClassId === 'OFFICE_M_S').length;
 
-    const resigned = employees.filter(e => e.status === 'RESIGNED').length;
-    const newHires = employees.filter(e => e.startDate && (e.startDate.includes('2026') || e.startDate.includes('26'))).length;
-    const turnoverRate = total > 0 ? ((resigned / total) * 100).toFixed(1) : '0.0';
+    // KPI 3 & 4: nhận việc / nghỉ việc tháng này (dùng RESIGNED status, parse startDate/resignedDate)
+    const newHiresThisMonth = employees.filter(e => {
+      const d = parseDate(e.startDate);
+      return d && d.getMonth()+1 === currentMonth && d.getFullYear() === currentYear;
+    }).length;
 
-    // Department breakdown
-    const deptMap: Record<string, { total: number; official: number; seasonal: number; late: number; early: number; missing: number; violation12h: number }> = {};
+    const resignedThisMonth = employees.filter(e => {
+      if (e.status !== 'RESIGNED') return false;
+      if (e.resignedDate) {
+        const d = parseDate(e.resignedDate);
+        return d ? d.getMonth()+1 === currentMonth && d.getFullYear() === currentYear : false;
+      }
+      // Nếu không có resignedDate, không tính vào tháng này (tránh bịa) - chỉ đếm khi có ngày
+      return false;
+    }).length;
+
+    // KPI 5: turnover = resignedThisMonth / total % (nếu total 0 thì 0)
+    const turnoverRate = total > 0 ? ((resignedThisMonth / total) * 100).toFixed(1) : '0.0';
+
+    // KPI 6: tổng giờ tăng ca tháng này
+    const overtimeThisMonth = overtimes.filter(o => o.month === currentMonth && o.year === currentYear);
+    const totalOvertimeHoursThisMonth = overtimeThisMonth.reduce((sum, o) => sum + (o.hours || 0), 0);
+
+    // KPI 7 & 8: cần lọc ngày làm việc (status W/N) và ngưỡng 60p
+    let totalLateCount = 0; // 0 < late <=60
+    let totalEarlyCount = 0; // 0 < early <=60
+    let totalMissingIn = 0; // có checkOut nhưng không có checkIn, và status là ngày làm việc
+    let totalMissingOut = 0; // có checkIn nhưng không có checkOut
+    let totalWorkdaySlots = 0;
+
+    const isWorkingDay = (code?: string) => code === 'W' || code === 'N';
+
+    timesheets.forEach(ts => {
+      if (!isWorkingDay(ts.statusCode)) return;
+      totalWorkdaySlots++;
+      if (ts.lateMinutes && ts.lateMinutes > 0 && ts.lateMinutes <= 60) {
+        totalLateCount++;
+      }
+      if (ts.earlyMinutes && ts.earlyMinutes > 0 && ts.earlyMinutes <= 60) {
+        totalEarlyCount++;
+      }
+      const hasIn = !!ts.checkIn;
+      const hasOut = !!ts.checkOut;
+      if (!hasIn && hasOut) totalMissingIn++;
+      if (hasIn && !hasOut) totalMissingOut++;
+    });
+
+    const totalLateEarly = totalLateCount + totalEarlyCount;
+    const totalMissingPunch = totalMissingIn + totalMissingOut;
+
+    // Department breakdown for Employees By Department (cột 1 và cột 3)
+    const deptMap: Record<string, { total: number; official: number; seasonal: number }> = {};
     employees.forEach(e => {
       const dept = e.department || 'Production';
-      if (!deptMap[dept]) {
-        deptMap[dept] = { total: 0, official: 0, seasonal: 0, late: 0, early: 0, missing: 0, violation12h: 0 };
-      }
+      if (!deptMap[dept]) deptMap[dept] = { total: 0, official: 0, seasonal: 0 };
       deptMap[dept].total++;
       if (e.contractType === 'OFFICIAL') deptMap[dept].official++;
       else deptMap[dept].seasonal++;
     });
-
-    // Default fallback departments matching Leggett & Platt ground truth
     if (Object.keys(deptMap).length === 0) {
-      deptMap['Production'] = { total: 54, official: 40, seasonal: 14, late: 12, early: 4, missing: 8, violation12h: 3 };
-      deptMap['Warehouse'] = { total: 22, official: 18, seasonal: 4, late: 5, early: 2, missing: 2, violation12h: 1 };
-      deptMap['QC'] = { total: 14, official: 12, seasonal: 2, late: 3, early: 1, missing: 1, violation12h: 0 };
-      deptMap['Maintenance'] = { total: 8, official: 6, seasonal: 2, late: 1, early: 0, missing: 0, violation12h: 0 };
-      deptMap['Office/Admin'] = { total: 4, official: 4, seasonal: 0, late: 0, early: 0, missing: 0, violation12h: 0 };
+      deptMap['Production'] = { total: 54, official: 40, seasonal: 14 };
+      deptMap['Warehouse'] = { total: 22, official: 18, seasonal: 4 };
+      deptMap['QC'] = { total: 14, official: 12, seasonal: 2 };
     }
-
-    // Timesheet violations
-    let totalLateCount = 0;
-    let totalEarlyCount = 0;
-    let totalMissingPunch = 0;
-    let totalWorkdaySlots = 0;
-
-    timesheets.forEach(ts => {
-      const emp = employees.find(e => e.employeeId === ts.employeeId);
-      const dept = emp?.department || 'Production';
-      if (!deptMap[dept]) {
-        deptMap[dept] = { total: 0, official: 0, seasonal: 0, late: 0, early: 0, missing: 0, violation12h: 0 };
-      }
-
-      totalWorkdaySlots++;
-      if (ts.lateMinutes && ts.lateMinutes > 0) {
-        totalLateCount++;
-        deptMap[dept].late++;
-      }
-      if (ts.earlyMinutes && ts.earlyMinutes > 0) {
-        totalEarlyCount++;
-        deptMap[dept].early++;
-      }
-      if (ts.statusCode === 'Off' || (!ts.checkIn && !!ts.checkOut) || (!!ts.checkIn && !ts.checkOut)) {
-        totalMissingPunch++;
-        deptMap[dept].missing++;
-      }
-    });
-
-    // 12h Rest Violations
-    let total12hViolations = 0;
-    shiftRosters.forEach(sr => {
-      if (sr.isRestViolation) {
-        total12hViolations++;
-        const dept = sr.department || 'Production';
-        if (deptMap[dept]) {
-          deptMap[dept].violation12h++;
-        }
-      }
-    });
-
-    const lateRate = totalWorkdaySlots > 0 ? ((totalLateCount / totalWorkdaySlots) * 100).toFixed(1) : '0.0';
-    const missingPunchRate = totalWorkdaySlots > 0 ? ((totalMissingPunch / totalWorkdaySlots) * 100).toFixed(1) : '0.0';
 
     const departmentChartData = Object.keys(deptMap).map(k => ({
       name: k,
       total: deptMap[k].total,
       official: deptMap[k].official,
       seasonal: deptMap[k].seasonal,
-      late: deptMap[k].late,
-      early: deptMap[k].early,
-      missing: deptMap[k].missing,
-      violation12h: deptMap[k].violation12h,
     }));
+
+    // Employees By Department - nghỉ chưa bù & nửa ngày (cột 3)
+    // pending: leaveRequests PENDING và timesheets Off
+    // halfDay: W/2 AL/2, W/2 UL/2, AL/2 UL/2
+    const pendingLeaveByDept: Record<string, number> = {};
+    const halfDayByDept: Record<string, number> = {};
+    // Từ leaveRequests
+    leaveRequests.forEach(lr => {
+      if (lr.status === 'PENDING') {
+        const dept = lr.department || 'Production';
+        pendingLeaveByDept[dept] = (pendingLeaveByDept[dept] || 0) + 1;
+      }
+    });
+    // Từ timesheets
+    timesheets.forEach(ts => {
+      const emp = employees.find(e => e.employeeId === ts.employeeId);
+      const dept = emp?.department || 'Production';
+      if (ts.statusCode === 'Off') {
+        pendingLeaveByDept[dept] = (pendingLeaveByDept[dept] || 0) + 1;
+      }
+      if (['W/2 AL/2', 'W/2 UL/2', 'AL/2 UL/2'].includes(ts.statusCode as string)) {
+        halfDayByDept[dept] = (halfDayByDept[dept] || 0) + 1;
+      }
+    });
+    const pendingHalfDayData = Object.keys(deptMap).map(k => ({
+      name: k,
+      pending: pendingLeaveByDept[k] || 0,
+      halfDay: halfDayByDept[k] || 0,
+      total: (pendingLeaveByDept[k] || 0) + (halfDayByDept[k] || 0),
+    })).sort((a,b) => b.total - a.total);
+
+    // 12h Rest Violations
+    let total12hViolations = 0;
+    shiftRosters.forEach(sr => {
+      if (sr.isRestViolation) total12hViolations++;
+    });
+
+    // Top 10 violators: tổng mọi vi phạm (late 60 + early 60 + missingIn/out + 12h) theo mã NV trong tháng hiện tại
+    const violatorMap: Record<string, { employeeId: string; fullName: string; count: number }> = {};
+    const addViol = (empId: string, inc=1) => {
+      if (!empId) return;
+      const emp = employees.find(e => e.employeeId === empId);
+      const key = empId;
+      if (!violatorMap[key]) violatorMap[key] = { employeeId: empId, fullName: emp?.fullName || empId, count: 0 };
+      violatorMap[key].count += inc;
+    };
+    timesheets.forEach(ts => {
+      // Chỉ tính tháng này
+      if (ts.month !== currentMonth || ts.year !== currentYear) return;
+      if (!isWorkingDay(ts.statusCode)) return;
+      if (ts.lateMinutes && ts.lateMinutes > 0 && ts.lateMinutes <= 60) addViol(ts.employeeId, 1);
+      if (ts.earlyMinutes && ts.earlyMinutes > 0 && ts.earlyMinutes <= 60) addViol(ts.employeeId, 1);
+      const hasIn = !!ts.checkIn;
+      const hasOut = !!ts.checkOut;
+      if ((!hasIn && hasOut) || (hasIn && !hasOut)) addViol(ts.employeeId, 1);
+    });
+    shiftRosters.forEach(sr => {
+      const d = parseDate(sr.date);
+      if (!d || d.getMonth()+1 !== currentMonth || d.getFullYear() !== currentYear) return;
+      if (sr.isRestViolation) addViol(sr.employeeId, 1);
+    });
+    const topViolators = Object.values(violatorMap).sort((a,b) => b.count - a.count).slice(0, 10);
 
     const pendingLeave = leaveRequests.filter(r => r.status === 'PENDING').length;
     const pendingOT = overtimes.filter(o => o.verificationStatus === 'PENDING').length;
@@ -143,60 +221,45 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       seasonal,
       shift1,
       shift2,
-      office,
-      resigned,
-      newHires,
+      newHiresThisMonth,
+      resignedThisMonth,
       turnoverRate,
+      totalOvertimeHoursThisMonth,
       totalLateCount,
       totalEarlyCount,
+      totalLateEarly,
+      totalMissingIn,
+      totalMissingOut,
       totalMissingPunch,
-      lateRate,
-      missingPunchRate,
+      totalWorkdaySlots,
       total12hViolations,
       pendingLeave,
       pendingOT,
-      departmentChartData
+      departmentChartData,
+      pendingHalfDayData,
+      topViolators,
     };
-  }, [employees, timesheets, shiftRosters, overtimes, leaveRequests]);
+  }, [employees, timesheets, shiftRosters, overtimes, leaveRequests, currentMonth, currentYear]);
 
   const maxDept = useMemo(() => {
     return Math.max(1, ...stats.departmentChartData.map(d => d.total));
   }, [stats.departmentChartData]);
 
+  const maxPendingHalf = useMemo(() => {
+    return Math.max(1, ...stats.pendingHalfDayData.map(d => d.total));
+  }, [stats.pendingHalfDayData]);
+
+  const displayName = session?.displayName || (language === 'vi' ? 'Mia Kiều' : 'Mia Kieu');
+  const welcomeText = t('welcomeBack');
+
   return (
     <div className="p-6 w-full space-y-6 font-sans">
-      {/* 1. Page Header & Breadcrumb (SmartHR Figma Spec) */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">Admin Dashboard</h2>
-          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium mt-0.5">
-            <span>🏠</span>
-            <span>/</span>
-            <span>Dashboard</span>
-            <span>/</span>
-            <span className="text-slate-600 font-bold">Admin Dashboard</span>
-          </div>
-        </div>
-
-        {/* 12h Rest Safety Alert Pill */}
-        {stats.total12hViolations > 0 && (
-          <button
-            onClick={() => onNavigate('shiftRoster')}
-            className="flex items-center gap-2 px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition shadow-sm animate-pulse"
-          >
-            <ShieldAlert className="w-4 h-4 text-rose-600" />
-            <span>{stats.total12hViolations} Ca vi phạm khoảng nghỉ &lt; 12h</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
-
-      {/* 2. Welcome Back Banner (Figma Spec: Adrian Avatar + Links) */}
+      {/* 2. Welcome Back Banner - chào đúng người đăng nhập, đồng bộ VI/EN */}
       <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="relative">
             <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-[#FF5B26] to-[#FFA07A] flex items-center justify-center text-white text-xl font-black shadow-md shadow-orange-200">
-              A
+              {displayName.charAt(0).toUpperCase()}
             </div>
             <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-blue-500 rounded-full border-2 border-white flex items-center justify-center text-white text-[10px]">
               ✓
@@ -204,23 +267,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
           <div>
             <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
-              <span>Welcome Back, Adrian</span>
-              <span className="text-xs font-bold text-slate-400">👋</span>
+              <span>{welcomeText} {displayName}</span>
+              <span className="text-xs">👋</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              You have{' '}
+              {language === 'vi' ? 'Bạn có' : 'You have'}{' '}
               <button 
                 onClick={() => onNavigate('overtime')}
                 className="font-bold text-[#FF5B26] underline decoration-orange-300 hover:text-orange-700"
               >
-                {stats.pendingOT} Pending Approvals
+                {stats.pendingOT} {language === 'vi' ? 'phê duyệt chờ' : 'Pending Approvals'}
               </button>{' '}
               &{' '}
               <button 
                 onClick={() => onNavigate('leavePending')}
                 className="font-bold text-[#FF5B26] underline decoration-orange-300 hover:text-orange-700"
               >
-                {stats.pendingLeave} Leave Requests
+                {stats.pendingLeave} {language === 'vi' ? 'yêu cầu nghỉ' : 'Leave Requests'}
               </button>
             </p>
           </div>
@@ -232,421 +295,279 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
           >
             <Download className="w-4 h-4 text-slate-500" />
-            <span>Export Report</span>
+            <span>{language === 'vi' ? 'Xuất báo cáo' : 'Export Report'}</span>
           </button>
           <button
             onClick={() => onNavigate('shiftRoster')}
             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-[#0F172A] hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition shadow-md shadow-slate-900/20"
           >
             <Plus className="w-4 h-4 text-orange-400" />
-            <span>+ Add Schedule</span>
+            <span>{language === 'vi' ? 'Thêm lịch' : '+ Add Schedule'}</span>
           </button>
         </div>
       </div>
 
-      {/* 3. Stat Metric Cards (8 Compact Figma Grid Cards) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-        {/* Card 1: Attendance Overview */}
+      {/* 3. 8 KPI Cards mới */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* KPI 1: Tổng số nhân viên */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-[#FFF2EE] flex items-center justify-center text-[#FF5B26]">
               <Users className="w-5 h-5" />
             </div>
-            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-              <TrendingUp className="w-3 h-3" /> +2.1%
+            <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full border">
+              {language === 'vi' ? 'Tổng' : 'Total'}
             </span>
           </div>
-          <div className="text-xs font-bold text-slate-500 mt-3">Attendance Overview</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{stats.official + stats.seasonal - stats.totalMissingPunch}/{stats.total}</div>
-          <button onClick={() => onNavigate('timesheet')} className="text-[11px] font-bold text-[#FF5B26] hover:underline mt-2 inline-block">
-            View Details
-          </button>
+          <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiTotalEmployees')}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{stats.total}</div>
+          <div className="text-[11px] text-slate-500 mt-1">
+            {t('seasonalEmployees')}: <b className="text-slate-900">{stats.seasonal}</b> • {t('officialEmployees')}: <b className="text-slate-900">{stats.official}</b>
+          </div>
         </div>
 
-        {/* Card 2: Employees On Shift */}
+        {/* KPI 2: Đang đi ca */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-800">
               <Clock className="w-5 h-5" />
             </div>
-            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
-              <TrendingDown className="w-3 h-3" /> -2.1%
-            </span>
+            <span className="text-[10px] font-bold text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full border">{stats.shift1 + stats.shift2}/{stats.total}</span>
           </div>
-          <div className="text-xs font-bold text-slate-500 mt-3">Nhân Viên Đi Ca 1 & Ca 2</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{stats.shift1 + stats.shift2}/{stats.total}</div>
-          <button onClick={() => onNavigate('shiftRoster')} className="text-[11px] font-bold text-slate-600 hover:underline mt-2 inline-block">
-            View All
-          </button>
+          <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiEmployeesOnShift')}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{stats.shift1 + stats.shift2}</div>
+          <div className="text-[11px] text-slate-500 mt-1">
+            {t('shift1Count')}: <b className="text-indigo-700">{stats.shift1}</b> • {t('shift2Count')}: <b className="text-pink-700">{stats.shift2}</b>
+          </div>
         </div>
 
-        {/* Card 3: Department Count */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">
-              <Building className="w-5 h-5" />
-            </div>
-            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
-              <TrendingDown className="w-3 h-3" /> -11.2%
-            </span>
-          </div>
-          <div className="text-xs font-bold text-slate-500 mt-3">Total No of Departments</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{stats.departmentChartData.length} / 5 Depts</div>
-          <button onClick={() => onNavigate('employees')} className="text-[11px] font-bold text-slate-600 hover:underline mt-2 inline-block">
-            View All
-          </button>
-        </div>
-
-        {/* Card 4: Quota & Tasks */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center text-pink-600">
-              <CalendarCheck className="w-5 h-5" />
-            </div>
-            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-              <TrendingUp className="w-3 h-3" /> +11.2%
-            </span>
-          </div>
-          <div className="text-xs font-bold text-slate-500 mt-3">Hồ Sơ Cần Duyệt Phép</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{stats.pendingLeave} Requests</div>
-          <button onClick={() => onNavigate('leavePending')} className="text-[11px] font-bold text-slate-600 hover:underline mt-2 inline-block">
-            View All
-          </button>
-        </div>
-
-        {/* Card 5: Hours Worked */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
-              <Briefcase className="w-5 h-5" />
-            </div>
-            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-              <TrendingUp className="w-3 h-3" /> +10.2%
-            </span>
-          </div>
-          <div className="text-xs font-bold text-slate-500 mt-3">Tổng Giờ Công Thực Tế</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">2,580h</div>
-          <button onClick={() => onNavigate('timesheet')} className="text-[11px] font-bold text-slate-600 hover:underline mt-2 inline-block">
-            View Transactions
-          </button>
-        </div>
-
-        {/* Card 6: Overtime Total */}
-        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-              <TrendingUp className="w-3 h-3" /> +2.1%
-            </span>
-          </div>
-          <div className="text-xs font-bold text-slate-500 mt-3">Tổng Giờ Tăng Ca Phê Duyệt</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">1,960.5h</div>
-          <button onClick={() => onNavigate('overtime')} className="text-[11px] font-bold text-slate-600 hover:underline mt-2 inline-block">
-            View Earnings
-          </button>
-        </div>
-
-        {/* Card 7: New Hires */}
+        {/* KPI 3: Nhận việc tháng này */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
               <UserPlus className="w-5 h-5" />
             </div>
-            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-              <TrendingUp className="w-3 h-3" /> +2.1%
-            </span>
+            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">+{stats.newHiresThisMonth}</span>
           </div>
-          <div className="text-xs font-bold text-slate-500 mt-3">Nhận Việc Mới Tháng Này</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">+{stats.newHires} Nhân viên</div>
-          <button onClick={() => onNavigate('employees')} className="text-[11px] font-bold text-slate-600 hover:underline mt-2 inline-block">
-            View All
-          </button>
+          <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiNewHiresMonth')}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">+{stats.newHiresThisMonth}</div>
+          <div className="text-[11px] text-slate-400 mt-1">{language === 'vi' ? `Tháng ${currentMonth}/${currentYear}` : `Month ${currentMonth}/${currentYear}`}</div>
         </div>
 
-        {/* Card 8: Turnover Rate */}
+        {/* KPI 4: Nghỉ việc tháng này */}
         <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white">
               <UserMinus className="w-5 h-5" />
             </div>
-            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">
-              <TrendingDown className="w-3 h-3" /> -11.3%
-            </span>
+            <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">-{stats.resignedThisMonth}</span>
           </div>
-          <div className="text-xs font-bold text-slate-500 mt-3">Tỷ Lệ Nghỉ Việc (Turnover)</div>
+          <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiResignedMonth')}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{stats.resignedThisMonth}</div>
+          <div className="text-[11px] text-slate-400 mt-1">{language === 'vi' ? 'Trạng thái RESIGNED' : 'Status RESIGNED'}</div>
+        </div>
+
+        {/* KPI 5: Tỷ lệ nghỉ việc */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
+              <Percent className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full">{stats.turnoverRate}%</span>
+          </div>
+          <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiTurnoverMonth')}</div>
           <div className="text-2xl font-black text-slate-900 mt-1">{stats.turnoverRate}%</div>
-          <button onClick={() => onNavigate('employees')} className="text-[11px] font-bold text-slate-600 hover:underline mt-2 inline-block">
-            View Candidates
-          </button>
+          <div className="text-[11px] text-slate-400 mt-1">{stats.resignedThisMonth}/{stats.total} {language === 'vi' ? 'đã xóa' : 'deleted'}</div>
+        </div>
+
+        {/* KPI 6: Tổng giờ tăng ca tháng này */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
+              <Briefcase className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">{currentMonth}/{currentYear}</span>
+          </div>
+          <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiOvertimeMonth')}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{stats.totalOvertimeHoursThisMonth.toFixed(1)}h</div>
+          <div className="text-[11px] text-slate-400 mt-1">{stats.totalOvertimeHoursThisMonth > 0 ? `${overtimes.filter(o => o.month===currentMonth && o.year===currentYear).length} bản ghi` : (language==='vi'?'Chưa có':'No records')}</div>
+        </div>
+
+        {/* KPI 7: Trễ / Sớm (≤60p) */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">{stats.totalLateEarly} lượt</span>
+          </div>
+          <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiLateEarly')}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{stats.totalLateEarly}</div>
+          <div className="text-[11px] text-slate-500 mt-1">
+            {language==='vi' ? 'Trễ' : 'Late'}: <b className="text-amber-700">{stats.totalLateCount}</b> • {language==='vi' ? 'Sớm' : 'Early'}: <b className="text-blue-700">{stats.totalEarlyCount}</b> <span className="text-[10px] text-slate-400">(≤60p)</span>
+          </div>
+        </div>
+
+        {/* KPI 8: Không bấm thẻ vào/ra */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full">{stats.totalMissingPunch} lượt</span>
+          </div>
+          <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiMissingPunch')}</div>
+          <div className="text-2xl font-black text-slate-900 mt-1">{stats.totalMissingPunch}</div>
+          <div className="text-[11px] text-slate-500 mt-1">
+            {language==='vi' ? 'Không vào' : 'Missing In'}: <b className="text-rose-700">{stats.totalMissingIn}</b> • {language==='vi' ? 'Không ra' : 'Missing Out'}: <b className="text-orange-700">{stats.totalMissingOut}</b>
+          </div>
         </div>
       </div>
 
-      {/* 4. Middle 3-Column Section (Employee Status, Attendance Semicircle Gauge, Dept & Clock-in) */}
+      {/* 4. Middle 3-Column: Employees By Department | Attendance TOP10 multi-arc | Pending/HalfDay */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Column 1: Employee Status (Segmented Bar + 2x2 Grid + Top Performer) */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-extrabold text-slate-900">Employee Status</h3>
-              <span className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-600">
-                📅 This Week
-              </span>
-            </div>
-
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs font-bold text-slate-400">Total Employee</span>
-              <span className="text-2xl font-black text-slate-900">{stats.total}</span>
-            </div>
-
-            {/* Segmented Horizontal Bar (Orange / Navy / Red / Pink) */}
-            <div className="h-3 w-full rounded-full overflow-hidden flex gap-1 mt-3">
-              <div style={{ width: '48%' }} className="bg-[#FF5B26] rounded-l-full" title="Chính thức (48%)" />
-              <div style={{ width: '24%' }} className="bg-[#0F172A]" title="Thời vụ (24%)" />
-              <div style={{ width: '18%' }} className="bg-[#EF4444]" title="Thử việc (18%)" />
-              <div style={{ width: '10%' }} className="bg-[#EC4899] rounded-r-full" title="Khác (10%)" />
-            </div>
-
-            {/* 2x2 Metric Grid */}
-            <div className="grid grid-cols-2 gap-4 mt-6 pt-4 border-t border-slate-100">
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
-                  <span className="w-2.5 h-2.5 rounded bg-[#FF5B26]" />
-                  <span>Fulltime ({Math.round((stats.official / stats.total) * 100)}%)</span>
-                </div>
-                <div className="text-2xl font-black text-slate-900 mt-1">{stats.official}</div>
-              </div>
-
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
-                  <span className="w-2.5 h-2.5 rounded bg-[#0F172A]" />
-                  <span>Seasonal ({Math.round((stats.seasonal / stats.total) * 100)}%)</span>
-                </div>
-                <div className="text-2xl font-black text-slate-900 mt-1">{stats.seasonal}</div>
-              </div>
-
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
-                  <span className="w-2.5 h-2.5 rounded bg-[#EF4444]" />
-                  <span>Ca Đêm N (12%)</span>
-                </div>
-                <div className="text-2xl font-black text-slate-900 mt-1">12</div>
-              </div>
-
-              <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
-                  <span className="w-2.5 h-2.5 rounded bg-[#EC4899]" />
-                  <span>Nghỉ Phép AL (4%)</span>
-                </div>
-                <div className="text-2xl font-black text-slate-900 mt-1">04</div>
-              </div>
-            </div>
-
-            {/* Top Performer Card */}
-            <div className="mt-6 p-3.5 bg-[#FFF9F6] border border-[#FFE7DD] rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-500 text-white font-black flex items-center justify-center text-sm shadow-inner">
-                  T
-                </div>
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Trịnh Đình Tâm</div>
-                  <div className="text-[11px] text-slate-500">Warehouse Lead (LEP010)</div>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] uppercase tracking-wider font-bold text-orange-600">Performance</div>
-                <div className="text-sm font-black text-orange-600">98%</div>
-              </div>
-            </div>
+        {/* Column 1: Employees By Department (thay Employee Status cũ) */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-extrabold text-slate-900">{t('chartEmployeesByDept')}</h3>
+            <span className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-600">
+              {language==='vi' ? 'Tổng' : 'Total'} {stats.total}
+            </span>
           </div>
-
-          <button
-            onClick={() => onNavigate('employees')}
-            className="w-full mt-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition text-center"
-          >
-            View All Employees
+          <div className="space-y-3">
+            {stats.departmentChartData.slice(0, 6).map((d) => {
+              const pct = maxDept > 0 ? (d.total / maxDept) * 100 : 0;
+              return (
+                <div key={d.name} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-slate-700">{d.name}</span>
+                    <span className="text-slate-900 font-extrabold">{d.total} NV</span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div style={{ width: `${pct}%` }} className="h-full bg-[#FF5B26] rounded-full transition-all duration-300" />
+                  </div>
+                  <div className="text-[10px] text-slate-500">{t('officialEmployees')}: {d.official} • {t('seasonalEmployees')}: {d.seasonal}</div>
+                </div>
+              );
+            })}
+          </div>
+          <button onClick={() => onNavigate('employees')} className="w-full mt-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition text-center">
+            {language==='vi' ? 'Xem tất cả nhân viên' : 'View All Employees'}
           </button>
         </div>
 
-        {/* Column 2: Attendance Semicircle Radial Gauge (Figma Spec) */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-extrabold text-slate-900">Attendance Overview</h3>
-              <span className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-600">
-                📅 Today
-              </span>
-            </div>
-
-            {/* Semicircle Gauge Graphic */}
-            <div className="relative flex flex-col items-center justify-center py-4">
-              <svg className="w-52 h-28" viewBox="0 0 200 110">
-                {/* Background Arc */}
-                <path
-                  d="M 20 100 A 80 80 0 0 1 180 100"
-                  fill="none"
-                  stroke="#F1F5F9"
-                  strokeWidth="20"
-                  strokeLinecap="round"
-                />
-                {/* Present Green Segment */}
-                <path
-                  d="M 20 100 A 80 80 0 0 1 100 20"
-                  fill="none"
-                  stroke="#10B981"
-                  strokeWidth="20"
-                  strokeLinecap="round"
-                  strokeDasharray="130"
-                  strokeDashoffset="0"
-                />
-                {/* Late Amber Segment */}
-                <path
-                  d="M 105 20 A 80 80 0 0 1 155 55"
-                  fill="none"
-                  stroke="#F59E0B"
-                  strokeWidth="20"
-                  strokeLinecap="round"
-                />
-                {/* Absent Red Segment */}
-                <path
-                  d="M 160 60 A 80 80 0 0 1 180 100"
-                  fill="none"
-                  stroke="#EF4444"
-                  strokeWidth="20"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute bottom-2 text-center">
-                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Attendance</div>
-                <div className="text-3xl font-black text-slate-900">{stats.official + stats.seasonal - stats.totalMissingPunch}</div>
-              </div>
-            </div>
-
-            {/* Legend Stats */}
-            <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="font-semibold text-slate-600">Present (78%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <span className="font-semibold text-slate-600">Late ({stats.lateRate}%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                <span className="font-semibold text-slate-600">Permission AL (4%)</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                <span className="font-semibold text-slate-600">Absent / Off ({stats.missingPunchRate}%)</span>
-              </div>
-            </div>
-
-            {/* Total Absentees Avatar Stack */}
-            <div className="mt-6 p-3 bg-slate-50 rounded-xl flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-700">Total Absentees:</span>
-                <div className="flex -space-x-1.5 overflow-hidden">
-                  <span className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-rose-400 text-[10px] font-bold text-white flex items-center justify-center">M</span>
-                  <span className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-amber-400 text-[10px] font-bold text-white flex items-center justify-center">T</span>
-                  <span className="inline-block h-6 w-6 rounded-full ring-2 ring-white bg-slate-400 text-[10px] font-bold text-white flex items-center justify-center">+2</span>
-                </div>
-              </div>
-              <button onClick={() => onNavigate('leavePending')} className="text-xs font-bold text-[#FF5B26] hover:underline">
-                View Details
-              </button>
-            </div>
+        {/* Column 2: Attendance Overview - TOP10 nhiều cung như mẫu */}
+        <div className="bg-[#0B1220] rounded-2xl p-6 border border-slate-800 shadow-sm flex flex-col text-white overflow-hidden relative">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-extrabold text-white">{t('chartAttendanceOverview')}</h3>
+            <span className="px-2.5 py-1 bg-white/10 border border-white/20 rounded-lg text-[11px] font-semibold text-white/80">
+              Top 10
+            </span>
           </div>
 
-          <button
-            onClick={() => onNavigate('timesheet')}
-            className="w-full mt-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition text-center"
-          >
-            View Full Attendance Matrix
-          </button>
-        </div>
-
-        {/* Column 3: Employees By Department (Horizontal Orange Bars) & Realtime Clock Feed */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-between space-y-6">
-          {/* Top: Dept Horizontal Bars */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-extrabold text-slate-900">Employees By Department</h3>
-              <span className="text-xs font-bold text-slate-400">Total {stats.total}</span>
-            </div>
-
-            <div className="space-y-3">
-              {stats.departmentChartData.slice(0, 5).map((d) => {
-                const pct = maxDept > 0 ? (d.total / maxDept) * 100 : 0;
-                return (
-                  <div key={d.name} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-slate-700">{d.name}</span>
-                      <span className="text-slate-900 font-extrabold">{d.total} NV</span>
-                    </div>
-                    <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        style={{ width: `${pct}%` }}
-                        className="h-full bg-[#FF5B26] rounded-full transition-all duration-300"
+          {/* Multi-arc pie như ảnh mẫu */}
+          <div className="relative flex flex-col items-center justify-center py-2 flex-1">
+            <div className="relative w-56 h-56 flex items-center justify-center">
+              {/* Nền vòng xám */}
+              <div className="absolute inset-0 rounded-full opacity-20" style={{ background: 'repeating-radial-gradient(circle at center, transparent 14px, #334155 15px, #334155 16px, transparent 16px, transparent 28px)' }} />
+              <svg className="w-56 h-56 rotate-[-90deg]" viewBox="0 0 200 200">
+                {/* Vẽ 10 cung đồng tâm với màu neon, độ dài theo tỉ lệ vi phạm */}
+                {(() => {
+                  const max = Math.max(1, ...stats.topViolators.map(v => v.count));
+                  const colors = ['#00E5FF', '#7C4DFF', '#FF6D00', '#FF4081', '#FFEA00', '#00E676', '#2979FF', '#FF1744', '#651FFF', '#18FFFF'];
+                  return stats.topViolators.slice(0, 10).map((v, i) => {
+                    const radius = 75 - i * 6;
+                    const circumference = 2 * Math.PI * radius;
+                    const pct = v.count / max;
+                    // Mỗi cung dài pct * 0.85 vòng, chừa gap
+                    const dash = circumference * (0.12 + pct * 0.75);
+                    const gap = circumference - dash;
+                    const rotate = i * 3; // lệch nhẹ để tạo hiệu ứng xoắn như mẫu
+                    return (
+                      <circle
+                        key={v.employeeId}
+                        cx="100" cy="100" r={radius}
+                        fill="none"
+                        stroke={colors[i % colors.length]}
+                        strokeWidth={i < 3 ? 5 : 3.5}
+                        strokeLinecap="round"
+                        strokeDasharray={`${dash} ${gap}`}
+                        strokeDashoffset={-rotate}
+                        style={{ filter: `drop-shadow(0 0 6px ${colors[i % colors.length]})`, opacity: 0.95 - i*0.05 }}
                       />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="text-[11px] font-bold text-emerald-600 mt-3 flex items-center gap-1">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>No of Employees increased by +20% this month</span>
-            </div>
-          </div>
-
-          {/* Bottom: Realtime Clock-In/Out List with Late Indicator */}
-          <div className="pt-4 border-t border-slate-100">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-xs font-extrabold text-slate-900">Recent Clock-In/Out</h4>
-              <span className="text-[10px] text-slate-400">Live Machine Feed</span>
-            </div>
-
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between text-xs p-2 rounded-xl bg-slate-50">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-[10px]">
-                    NT
-                  </div>
-                  <div>
-                    <div className="font-bold text-slate-900">Nguyễn Bá Trình</div>
-                    <div className="text-[10px] text-slate-400">WH • In 07:28 AM</div>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md">
-                  Đúng giờ
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between text-xs p-2 rounded-xl bg-rose-50/60">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-[10px]">
-                    MC
-                  </div>
-                  <div>
-                    <div className="font-bold text-slate-900">Mã Hén Chiêu</div>
-                    <div className="text-[10px] text-slate-400">WH • In 07:48 AM</div>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 bg-rose-600 text-white text-[10px] font-bold rounded-md">
-                  Trễ 18 phút
-                </span>
+                    );
+                  });
+                })()}
+                {/* Vòng trung tâm TOP 10 */}
+                <circle cx="100" cy="100" r="38" fill="none" stroke="#FF3B30" strokeWidth="3" style={{ filter: 'drop-shadow(0 0 8px #FF3B30)' }} />
+                <circle cx="100" cy="100" r="32" fill="#0B1220" stroke="#FF3B30" strokeWidth="1" opacity={0.9} />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <div className="text-[10px] font-black tracking-widest text-white/90">TOP 10</div>
+                <div className="text-[10px] font-bold text-rose-400 tracking-wider">{language==='vi' ? 'VI PHẠM' : 'VIOLATORS'}</div>
               </div>
             </div>
 
-            <button
-              onClick={() => onNavigate('timesheet')}
-              className="w-full mt-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition text-center"
-            >
-              View All Attendance
-            </button>
+            {/* Legend top 10 theo mã NV */}
+            <div className="w-full mt-3 space-y-1 max-h-[120px] overflow-y-auto pr-1">
+              {stats.topViolators.length === 0 ? (
+                <div className="text-[11px] text-white/60 text-center py-4">{language==='vi' ? 'Chưa có vi phạm trong tháng' : 'No violations this month'}</div>
+              ) : (
+                stats.topViolators.map((v, i) => (
+                  <div key={v.employeeId} className="flex items-center justify-between text-[11px] bg-white/5 rounded-lg px-2.5 py-1 border border-white/10">
+                    <span className="font-mono font-bold text-white/90">{i+1}. {v.employeeId}</span>
+                    <span className="text-white/70 truncate ml-2">{v.fullName}</span>
+                    <span className="ml-auto font-black text-cyan-300">{v.count} {language==='vi' ? 'lần' : 'times'}</span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
+
+          <button onClick={() => onNavigate('timesheet')} className="w-full mt-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition text-center">
+            {language==='vi' ? 'Xem ma trận chấm công' : 'View Full Attendance Matrix'}
+          </button>
+        </div>
+
+        {/* Column 3: Employees By Department - nghỉ chưa bù & nửa ngày */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-extrabold text-slate-900">{t('chartPendingHalfDay')}</h3>
+            <span className="text-xs font-bold text-slate-400">{language==='vi' ? 'Tháng' : 'Month'} {currentMonth}/{currentYear}</span>
+          </div>
+
+          <div className="space-y-3">
+            {stats.pendingHalfDayData.slice(0, 6).map((d) => {
+              const pct = maxPendingHalf > 0 ? (d.total / maxPendingHalf) * 100 : 0;
+              const pendingPct = d.total > 0 ? (d.pending / d.total) * 100 : 0;
+              return (
+                <div key={d.name} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-slate-700">{d.name}</span>
+                    <span className="text-slate-900 font-extrabold">{d.total} {language==='vi' ? 'lượt' : 'cases'}</span>
+                  </div>
+                  <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                    <div style={{ width: `${pendingPct}%` }} className="h-full bg-amber-500 transition-all" title={`Chưa bù: ${d.pending}`} />
+                    <div style={{ width: `${100 - pendingPct}%` }} className="h-full bg-blue-500 transition-all" title={`Nửa ngày: ${d.halfDay}`} />
+                  </div>
+                  <div className="flex justify-between text-[10px] font-semibold">
+                    <span className="text-amber-600">● {language==='vi' ? 'Chưa bù' : 'Pending'}: {d.pending}</span>
+                    <span className="text-blue-600">● {language==='vi' ? 'Nửa ngày' : 'Half-day'}: {d.halfDay}</span>
+                  </div>
+                </div>
+              );
+            })}
+            {stats.pendingHalfDayData.every(d => d.total===0) && (
+              <div className="text-center py-6 text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed">{language==='vi' ? 'Không có nghỉ chưa bù / nửa ngày trong tháng' : 'No pending/half-day this month'}</div>
+            )}
+          </div>
+          <div className="text-[11px] font-bold text-slate-500 mt-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
+            {language==='vi' ? 'Ra sớm/về trễ >60p không tính trễ/sớm, tính là nửa ngày' : 'Early/late >60m counted as half-day, not late/early'}
+          </div>
+
+          <button onClick={() => onNavigate('leavePending')} className="w-full mt-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition text-center">
+            {language==='vi' ? 'Xem danh sách chờ bù phép' : 'View Pending Leave'}
+          </button>
         </div>
       </div>
     </div>
