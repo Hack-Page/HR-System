@@ -8,7 +8,9 @@ import {
   RotateCcw, 
   ScanLine, 
   Settings,
-  Briefcase
+  Briefcase,
+  ClipboardList,
+  ExternalLink
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -174,6 +176,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onSelectPage }) =>
             <span>{t('settings')} & RBAC</span>
           </div>
         </button>
+
+        {/* Tạo khảo sát - external link */}
+        <a
+          href="https://survey-zd8.pages.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-medium transition text-slate-600 hover:bg-slate-50 hover:text-slate-900 group"
+        >
+          <div className="flex items-center gap-2.5">
+            <ClipboardList className="w-4 h-4 text-slate-400 group-hover:text-[#FF5B26]" />
+            <span>Tạo khảo sát</span>
+          </div>
+          <ExternalLink className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600" />
+        </a>
       </div>
 
       {/* User Footer Profile Card */}
