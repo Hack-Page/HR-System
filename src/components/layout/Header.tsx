@@ -9,7 +9,10 @@ import {
   ChevronDown,
   Cloud,
   LogOut,
-  UserCircle2
+  UserCircle2,
+  Bell,
+  AlertTriangle,
+  CalendarClock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -18,6 +21,8 @@ import { useModal } from '../../context/ModalContext';
 import { exportTimesheetToExcel } from '../../services/excel-exporter';
 import { exportDatabaseToSnapshot, importDatabaseFromSnapshot } from '../../services/db-sync';
 import { db } from '../../db';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { daysUntil as calcDaysUntil } from '../../services/pay-period';
 
 export const Header: React.FC = () => {
   const { session, currentRole, hasPermission, logout, refreshPermissions } = useAuth();
@@ -31,6 +36,39 @@ export const Header: React.FC = () => {
   const [importProgress, setImportProgress] = useState(0);
   const [importStatusText, setImportStatusText] = useState('');
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+
+  // Chuông thông báo hợp đồng sắp hết hạn
+  const employees = useLiveQuery(() => db.employees.toArray(), []) || [];
+  const contractNotifs = (() => {
+    const now = new Date();
+    const list: Array<{ emp: any; days: number; term: string; notifyAt: string }> = [];
+    employees.forEach(emp => {
+      if (!emp.contractEndDate || emp.status === 'RESIGNED') return;
+      if (emp.contractTerm === 'PERMANENT') return;
+      const days = calcDaysUntil(emp.contractEndDate, now);
+      if (days === null || days < 0 || days > 30) return;
+      // Ngưỡng thông báo chuẩn
+      const term = emp.contractTerm;
+      let shouldNotify = false;
+      let notifyAt = '';
+      if (term === '1_MONTH' || term === '2_MONTHS') {
+        if (days <= 14 && days >= 12) { shouldNotify = true; notifyAt = '14 ngày'; }
+        else if (days <= 7 && days >= 5) { shouldNotify = true; notifyAt = '7 ngày'; }
+        else if (days <= 5 && days >= 0) { shouldNotify = true; notifyAt = `${days} ngày`; }
+        else if (days <= 14 && days > 7) { shouldNotify = true; notifyAt = '14 ngày'; }
+        else if (days <= 7) { shouldNotify = true; notifyAt = '7 ngày'; }
+      } else if (term === '1_YEAR' || term === '3_YEARS') {
+        if (days <= 30 && days > 15) { shouldNotify = true; notifyAt = '30 ngày'; }
+        else if (days <= 15 && days >= 0) { shouldNotify = true; notifyAt = days <= 15 && days > 5 ? '15 ngày' : `${days} ngày`; }
+      } else {
+        // Chưa cấu hình term: nếu còn <=30 ngày thì báo
+        if (days <= 30 && days >= 0) { shouldNotify = true; notifyAt = `${days} ngày`; }
+      }
+      if (shouldNotify) list.push({ emp, days, term: term || '—', notifyAt });
+    });
+    return list.sort((a,b) => a.days - b.days);
+  })();
 
   // Huỷ import worker khi rời trang để tránh leak + setState trên unmounted
   useEffect(() => () => {
@@ -136,7 +174,7 @@ export const Header: React.FC = () => {
 
   return (
     <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between sticky top-0 z-30 shadow-sm">
-      {/* Left: Logo Leggett & Platt duy nhất - dời từ Sidebar S + SmartHR lên đây, xóa thanh tìm kiếm */}
+      {/* Left: Logo + Chuông thông báo hợp đồng */}
       <div className="flex items-center gap-4 flex-1 max-w-lg">
         <img
           src="/Leggett.jpg"
@@ -144,6 +182,57 @@ export const Header: React.FC = () => {
           className="h-9 w-auto object-contain max-w-[260px]"
           loading="eager"
         />
+        {/* Chuông thông báo hợp đồng sắp hết hạn */}
+        <div className="relative">
+          <button
+            onClick={() => setIsNotifOpen(v => !v)}
+            className="relative p-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition shadow-sm"
+            title="Thông báo hợp đồng sắp hết hạn"
+            aria-label="Thông báo hợp đồng"
+          >
+            <Bell className="w-5 h-5 text-slate-700" />
+            {contractNotifs.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-rose-600 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white shadow">
+                {contractNotifs.length}
+              </span>
+            )}
+          </button>
+          {isNotifOpen && (
+            <div className="absolute left-0 mt-2 w-[380px] bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in fade-in zoom-in-95 overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+                <div className="font-extrabold text-slate-900 text-xs flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-amber-600" />
+                  <span>Hợp đồng sắp hết hạn</span>
+                  <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-[10px]">{contractNotifs.length} nhân viên</span>
+                </div>
+                <button onClick={() => setIsNotifOpen(false)} className="text-slate-400 hover:text-slate-600 text-xs">×</button>
+              </div>
+              <div className="max-h-[320px] overflow-y-auto">
+                {contractNotifs.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-slate-500">
+                    <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500 mb-2" />
+                    <p className="font-semibold text-slate-700">Không có hợp đồng sắp hết hạn</p>
+                    <p className="text-[11px] text-slate-400 mt-1">Ngưỡng: HĐ 1-2 tháng → 14 & 7 ngày | HĐ 1/3 năm → 30 & 15 ngày | Vĩnh viễn không báo</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {contractNotifs.map(({ emp, days, term }) => (
+                      <div key={emp.employeeId} className="px-4 py-3 hover:bg-slate-50 flex items-start justify-between gap-3">
+                        <div className="flex-1">
+                          <div className="font-bold text-slate-900 text-xs">{emp.employeeId} • {emp.fullName}</div>
+                          <div className="text-[11px] text-slate-500">{emp.department} • {emp.position} • {term === '1_MONTH' ? 'HĐ 1 tháng' : term === '2_MONTHS' ? 'HĐ 2 tháng' : term === '1_YEAR' ? 'HĐ 1 năm' : term === '3_YEARS' ? 'HĐ 3 năm' : term === 'PERMANENT' ? 'Vĩnh viễn' : 'Chưa cấu hình'} {emp.contractEndDate ? `• hết hạn ${emp.contractEndDate}` : ''}</div>
+                        </div>
+                        <span className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] font-black border ${days <= 5 ? 'bg-rose-100 text-rose-700 border-rose-200 animate-pulse' : days <= 15 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+                          còn {days} ngày
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Right: Actions, Import/Export, Language & Role Switcher */}

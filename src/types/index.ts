@@ -68,6 +68,12 @@ export interface IEmployee {
   status: EmployeeStatus;
   resignedDate?: string;
   notes?: string;
+  // Mở rộng: hợp đồng & thử việc
+  contractTerm?: '1_MONTH' | '2_MONTHS' | '1_YEAR' | '3_YEARS' | 'PERMANENT'; // thời hạn hợp đồng
+  contractStartDate?: string; // DD/MM/YYYY
+  contractEndDate?: string;   // DD/MM/YYYY
+  probationMonths?: 1 | 2;    // thời gian thử việc
+  probationEndDate?: string;  // DD/MM/YYYY - tự tính từ startDate + probationMonths
 }
 
 export interface IRawAttendanceLog {

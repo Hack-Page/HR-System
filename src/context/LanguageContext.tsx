@@ -53,10 +53,10 @@ const DICTIONARY = {
     kpiOvertimeMonth: 'Tổng Giờ Tăng Ca Tháng Này',
     kpiLateEarly: 'Tổng Nhân Viên Đi Trễ / Về Sớm',
     kpiMissingPunch: 'Tổng Số Nhân Viên Không Bấm Thẻ',
-    chartEmployeesByDept: 'Employees By Department',
-    chartAttendanceOverview: 'Attendance Overview',
+    chartEmployeesByDept: 'Nhân viên theo bộ phận',
+    chartAttendanceOverview: 'Tổng quan chấm công',
     chartTopViolators: 'Top 10 Nhân Viên Vi Phạm',
-    chartPendingHalfDay: 'Nghỉ Chưa Bù & Nửa Ngày',
+    chartPendingHalfDay: 'Danh sách nghỉ chưa bù phép (bao gồm nửa ngày)',
     
     // Table & Matrix
     employeeId: 'Mã NV',
@@ -129,10 +129,10 @@ const DICTIONARY = {
     kpiOvertimeMonth: 'Total Overtime Hours This Month',
     kpiLateEarly: 'Late / Early Departures',
     kpiMissingPunch: 'Missing Punch In/Out',
-    chartEmployeesByDept: 'Employees By Department',
-    chartAttendanceOverview: 'Attendance Overview',
+    chartEmployeesByDept: 'Nhân viên theo bộ phận',
+    chartAttendanceOverview: 'Tổng quan chấm công',
     chartTopViolators: 'Top 10 Violators',
-    chartPendingHalfDay: 'Pending & Half-Day Leave',
+    chartPendingHalfDay: 'Danh sách nghỉ chưa bù phép (bao gồm nửa ngày)',
     
     // Table & Matrix
     employeeId: 'Emp ID',

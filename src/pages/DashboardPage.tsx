@@ -33,6 +33,7 @@ import { db } from '../db';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { NavPageId } from '../components/layout/Sidebar';
+import { getPayPeriod, getCurrentPayPeriod, isInPayPeriod, formatPayPeriodLabel, parseDateLoose } from '../services/pay-period';
 
 interface DashboardPageProps {
   onNavigate: (page: NavPageId) => void;
@@ -50,24 +51,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const leaveRequests = useLiveQuery(() => db.leaveRequests.toArray(), []) || [];
 
   const now = new Date();
-  const currentMonth = now.getMonth() + 1;
-  const currentYear = now.getFullYear();
+  // Kỳ công chuẩn: OFFICIAL 21-20, SEASONAL 01-31
+  const officialPay = getCurrentPayPeriod(now, 'OFFICIAL');
+  const seasonalPay = getCurrentPayPeriod(now, 'SEASONAL');
+  // Mặc định kỳ hiển thị chính là OFFICIAL (21-20)
+  const currentMonth = officialPay.payMonth;
+  const currentYear = officialPay.payYear;
+  const officialPayLabel = formatPayPeriodLabel(officialPay.payMonth, officialPay.payYear, 'OFFICIAL');
+  const seasonalPayLabel = formatPayPeriodLabel(seasonalPay.payMonth, seasonalPay.payYear, 'SEASONAL');
 
-  // Helper parse DD/MM/YYYY or YYYY-MM-DD
-  const parseDate = (s?: string): Date | null => {
-    if (!s) return null;
-    if (s.includes('/')) {
-      const [d,m,y] = s.split('/').map(Number);
-      if (!d || !m || !y) return null;
-      return new Date(y, m-1, d);
-    }
-    if (s.includes('-')) {
-      const [y,m,d] = s.split('-').map(Number);
-      if (!y || !m || !d) return null;
-      return new Date(y, m-1, d);
-    }
-    return null;
-  };
+  // Helper parse DD/MM/YYYY or YYYY-MM-DD (dùng parseDateLoose chung)
+  const parseDate = parseDateLoose;
 
   // Compute all Dashboard Metrics - 8 KPI mới
   const stats = useMemo(() => {
@@ -78,30 +72,47 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     const shift1 = employees.filter(e => e.shiftClassId === 'SHIFT_1').length;
     const shift2 = employees.filter(e => e.shiftClassId === 'SHIFT_2').length;
 
-    // KPI 3 & 4: nhận việc / nghỉ việc tháng này (dùng RESIGNED status, parse startDate/resignedDate)
+    // KPI 3 & 4: nhận việc / nghỉ việc theo KỲ CÔNG (21-20 cho OFFICIAL, 01-31 cho SEASONAL)
     const newHiresThisMonth = employees.filter(e => {
       const d = parseDate(e.startDate);
-      return d && d.getMonth()+1 === currentMonth && d.getFullYear() === currentYear;
+      if (!d) return false;
+      const pp = getPayPeriod(d, e.contractType);
+      const cur = e.contractType === 'SEASONAL' ? seasonalPay : officialPay;
+      return pp.payMonth === cur.payMonth && pp.payYear === cur.payYear;
     }).length;
 
     const resignedThisMonth = employees.filter(e => {
       if (e.status !== 'RESIGNED') return false;
       if (e.resignedDate) {
         const d = parseDate(e.resignedDate);
-        return d ? d.getMonth()+1 === currentMonth && d.getFullYear() === currentYear : false;
+        if (!d) return false;
+        const pp = getPayPeriod(d, e.contractType);
+        const cur = e.contractType === 'SEASONAL' ? seasonalPay : officialPay;
+        return pp.payMonth === cur.payMonth && pp.payYear === cur.payYear;
       }
-      // Nếu không có resignedDate, không tính vào tháng này (tránh bịa) - chỉ đếm khi có ngày
       return false;
     }).length;
 
     // KPI 5: turnover = resignedThisMonth / total % (nếu total 0 thì 0)
     const turnoverRate = total > 0 ? ((resignedThisMonth / total) * 100).toFixed(1) : '0.0';
 
-    // KPI 6: tổng giờ tăng ca tháng này
-    const overtimeThisMonth = overtimes.filter(o => o.month === currentMonth && o.year === currentYear);
+    // KPI 6: tổng giờ tăng ca kỳ hiện tại (theo kỳ công + loại trừ thử việc)
+    const isInProbation = (emp: any, ref: Date) => {
+      if (!emp?.probationEndDate) return false;
+      const d = parseDate(emp.probationEndDate);
+      if (!d) return false;
+      return ref > new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()) && ref < d ? true : ref < d;
+    };
+    const overtimeThisMonth = overtimes.filter(o => {
+      const emp = employees.find(e => e.employeeId === o.employeeId);
+      if (emp && isInProbation(emp, now)) return false; // thử việc không tính tăng ca
+      const ct = emp?.contractType || 'OFFICIAL';
+      const cur = ct === 'SEASONAL' ? seasonalPay : officialPay;
+      return isInPayPeriod(o.date, ct, cur.payMonth, cur.payYear);
+    });
     const totalOvertimeHoursThisMonth = overtimeThisMonth.reduce((sum, o) => sum + (o.hours || 0), 0);
 
-    // KPI 7 & 8: cần lọc ngày làm việc (status W/N) và ngưỡng 60p
+    // KPI 7 & 8: cần lọc theo kỳ công hiện tại và ngày làm việc (W/N), ngưỡng 60p
     let totalLateCount = 0; // 0 < late <=60
     let totalEarlyCount = 0; // 0 < early <=60
     let totalMissingIn = 0; // có checkOut nhưng không có checkIn, và status là ngày làm việc
@@ -112,6 +123,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
 
     timesheets.forEach(ts => {
       if (!isWorkingDay(ts.statusCode)) return;
+      const emp = employees.find(e => e.employeeId === ts.employeeId);
+      const ct = emp?.contractType || 'OFFICIAL';
+      const cur = ct === 'SEASONAL' ? seasonalPay : officialPay;
+      if (!isInPayPeriod(ts.date, ct, cur.payMonth, cur.payYear)) return;
       totalWorkdaySlots++;
       if (ts.lateMinutes && ts.lateMinutes > 0 && ts.lateMinutes <= 60) {
         totalLateCount++;
@@ -150,27 +165,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       seasonal: deptMap[k].seasonal,
     }));
 
-    // Employees By Department - nghỉ chưa bù & nửa ngày (cột 3)
-    // pending: leaveRequests PENDING và timesheets Off
-    // halfDay: W/2 AL/2, W/2 UL/2, AL/2 UL/2
+    // Danh sách nghỉ chưa bù phép (bao gồm nửa ngày) - cột 3 - theo kỳ công hiện tại
     const pendingLeaveByDept: Record<string, number> = {};
     const halfDayByDept: Record<string, number> = {};
-    // Từ leaveRequests
     leaveRequests.forEach(lr => {
-      if (lr.status === 'PENDING') {
-        const dept = lr.department || 'Production';
-        pendingLeaveByDept[dept] = (pendingLeaveByDept[dept] || 0) + 1;
-      }
-    });
-    // Từ timesheets
-    timesheets.forEach(ts => {
-      const emp = employees.find(e => e.employeeId === ts.employeeId);
-      const dept = emp?.department || 'Production';
-      if (ts.statusCode === 'Off') {
-        pendingLeaveByDept[dept] = (pendingLeaveByDept[dept] || 0) + 1;
-      }
-      if (['W/2 AL/2', 'W/2 UL/2', 'AL/2 UL/2'].includes(ts.statusCode as string)) {
+      if (lr.status !== 'PENDING') return;
+      const emp = employees.find(e => e.employeeId === lr.employeeId);
+      const ct = (emp?.contractType || 'OFFICIAL') as 'OFFICIAL' | 'SEASONAL';
+      const cur = ct === 'SEASONAL' ? seasonalPay : officialPay;
+      if (!isInPayPeriod(lr.date, ct, cur.payMonth, cur.payYear)) return;
+      const dept = lr.department || emp?.department || 'Production';
+      if (lr.durationDays === 0.5) {
         halfDayByDept[dept] = (halfDayByDept[dept] || 0) + 1;
+      } else {
+        pendingLeaveByDept[dept] = (pendingLeaveByDept[dept] || 0) + 1;
       }
     });
     const pendingHalfDayData = Object.keys(deptMap).map(k => ({
@@ -180,13 +188,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       total: (pendingLeaveByDept[k] || 0) + (halfDayByDept[k] || 0),
     })).sort((a,b) => b.total - a.total);
 
-    // 12h Rest Violations
+    // 12h Rest Violations - theo kỳ công hiện tại
     let total12hViolations = 0;
     shiftRosters.forEach(sr => {
-      if (sr.isRestViolation) total12hViolations++;
+      if (!sr.isRestViolation) return;
+      const emp = employees.find(e => e.employeeId === sr.employeeId);
+      const ct = (emp?.contractType || 'OFFICIAL') as 'OFFICIAL' | 'SEASONAL';
+      const cur = ct === 'SEASONAL' ? seasonalPay : officialPay;
+      if (!isInPayPeriod(sr.date, ct, cur.payMonth, cur.payYear)) return;
+      total12hViolations++;
     });
 
-    // Top 10 violators: tổng mọi vi phạm (late 60 + early 60 + missingIn/out + 12h) theo mã NV trong tháng hiện tại
+    // Top 10 violators: tổng mọi vi phạm (late 60 + early 60 + missingIn/out + 12h) theo kỳ công hiện tại
     const violatorMap: Record<string, { employeeId: string; fullName: string; count: number }> = {};
     const addViol = (empId: string, inc=1) => {
       if (!empId) return;
@@ -196,8 +209,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       violatorMap[key].count += inc;
     };
     timesheets.forEach(ts => {
-      // Chỉ tính tháng này
-      if (ts.month !== currentMonth || ts.year !== currentYear) return;
+      const emp = employees.find(e => e.employeeId === ts.employeeId);
+      const ct = (emp?.contractType || 'OFFICIAL') as 'OFFICIAL' | 'SEASONAL';
+      const cur = ct === 'SEASONAL' ? seasonalPay : officialPay;
+      if (!isInPayPeriod(ts.date, ct, cur.payMonth, cur.payYear)) return;
       if (!isWorkingDay(ts.statusCode)) return;
       if (ts.lateMinutes && ts.lateMinutes > 0 && ts.lateMinutes <= 60) addViol(ts.employeeId, 1);
       if (ts.earlyMinutes && ts.earlyMinutes > 0 && ts.earlyMinutes <= 60) addViol(ts.employeeId, 1);
@@ -206,8 +221,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       if ((!hasIn && hasOut) || (hasIn && !hasOut)) addViol(ts.employeeId, 1);
     });
     shiftRosters.forEach(sr => {
-      const d = parseDate(sr.date);
-      if (!d || d.getMonth()+1 !== currentMonth || d.getFullYear() !== currentYear) return;
+      const emp = employees.find(e => e.employeeId === sr.employeeId);
+      const ct = (emp?.contractType || 'OFFICIAL') as 'OFFICIAL' | 'SEASONAL';
+      const cur = ct === 'SEASONAL' ? seasonalPay : officialPay;
+      if (!isInPayPeriod(sr.date, ct, cur.payMonth, cur.payYear)) return;
       if (sr.isRestViolation) addViol(sr.employeeId, 1);
     });
     const topViolators = Object.values(violatorMap).sort((a,b) => b.count - a.count).slice(0, 10);
@@ -238,8 +255,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       departmentChartData,
       pendingHalfDayData,
       topViolators,
+      officialPay,
+      seasonalPay,
+      officialPayLabel,
+      seasonalPayLabel,
     };
-  }, [employees, timesheets, shiftRosters, overtimes, leaveRequests, currentMonth, currentYear]);
+  }, [employees, timesheets, shiftRosters, overtimes, leaveRequests, currentMonth, currentYear, officialPay, seasonalPay, officialPayLabel, seasonalPayLabel]);
 
   const maxDept = useMemo(() => {
     return Math.max(1, ...stats.departmentChartData.map(d => d.total));
@@ -307,6 +328,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         </div>
       </div>
 
+      {/* Pay Period Info - chu kỳ công chuẩn */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div className="flex flex-col gap-1">
+          <div className="font-extrabold text-slate-900 flex items-center gap-2">
+            <CalendarCheck className="w-4 h-4 text-orange-500" />
+            <span>{language==='vi' ? 'Kỳ công hiện tại' : 'Current Pay Period'}</span>
+          </div>
+          <div className="text-[11px] text-slate-600 flex flex-col sm:flex-row gap-2 sm:gap-4">
+            <span className="px-2.5 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg font-bold">Chính thức (21-20): {stats.officialPayLabel}</span>
+            <span className="px-2.5 py-1 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg font-bold">Thời vụ (01-31): {stats.seasonalPayLabel}</span>
+          </div>
+        </div>
+        <div className="text-[11px] text-slate-500 max-w-md leading-relaxed">
+          {language==='vi' ? 'Ví dụ: 27/08/2026 → kỳ Tháng 9 (21/08-20/09) cho Chính thức, Tháng 8 cho Thời vụ. Báo cáo sai phạm tính theo kỳ này.' : 'Example: 27/08/2026 → Sep period (21/08-20/09) for Official, Aug for Seasonal.'}
+        </div>
+      </div>
+
       {/* 3. 8 KPI Cards mới */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Tổng số nhân viên */}
@@ -351,7 +389,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </div>
           <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiNewHiresMonth')}</div>
           <div className="text-2xl font-black text-slate-900 mt-1">+{stats.newHiresThisMonth}</div>
-          <div className="text-[11px] text-slate-400 mt-1">{language === 'vi' ? `Tháng ${currentMonth}/${currentYear}` : `Month ${currentMonth}/${currentYear}`}</div>
+          <div className="text-[11px] text-slate-400 mt-1">{language==='vi' ? `Kỳ ${currentMonth}/${currentYear}` : `Period ${currentMonth}/${currentYear}`} <span className="text-[10px] text-slate-400">({stats.officialPayLabel})</span></div>
         </div>
 
         {/* KPI 4: Nghỉ việc tháng này */}
@@ -386,11 +424,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600">
               <Briefcase className="w-5 h-5" />
             </div>
-            <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">{currentMonth}/{currentYear}</span>
-          </div>
-          <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiOvertimeMonth')}</div>
-          <div className="text-2xl font-black text-slate-900 mt-1">{stats.totalOvertimeHoursThisMonth.toFixed(1)}h</div>
-          <div className="text-[11px] text-slate-400 mt-1">{stats.totalOvertimeHoursThisMonth > 0 ? `${overtimes.filter(o => o.month===currentMonth && o.year===currentYear).length} bản ghi` : (language==='vi'?'Chưa có':'No records')}</div>
+            <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">Kỳ {currentMonth}/{currentYear}</span>
+           </div>
+           <div className="text-xs font-bold text-slate-500 mt-3">{t('kpiOvertimeMonth')}</div>
+           <div className="text-2xl font-black text-slate-900 mt-1">{stats.totalOvertimeHoursThisMonth.toFixed(1)}h</div>
+           <div className="text-[11px] text-slate-400 mt-1">{stats.totalOvertimeHoursThisMonth > 0 ? `${overtimes.filter(o => { const emp = employees.find(e=>e.employeeId===o.employeeId); const ct = emp?.contractType||'OFFICIAL'; const cur = ct==='SEASONAL'? seasonalPay: officialPay; return isInPayPeriod(o.date, ct, cur.payMonth, cur.payYear); }).length} bản ghi` : (language==='vi'?'Chưa có':'No records')}</div>
         </div>
 
         {/* KPI 7: Trễ / Sớm (≤60p) */}
@@ -456,33 +494,34 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
           </button>
         </div>
 
-        {/* Column 2: Attendance Overview - TOP10 nhiều cung như mẫu */}
-        <div className="bg-[#0B1220] rounded-2xl p-6 border border-slate-800 shadow-sm flex flex-col text-white overflow-hidden relative">
+        {/* Column 2: Attendance Overview - TOP10 nhiều cung (đồng bộ thẻ trắng như hệ thống) */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col overflow-hidden relative">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-extrabold text-white">{t('chartAttendanceOverview')}</h3>
-            <span className="px-2.5 py-1 bg-white/10 border border-white/20 rounded-lg text-[11px] font-semibold text-white/80">
+            <h3 className="text-sm font-extrabold text-slate-900">{t('chartAttendanceOverview')}</h3>
+            <span className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-semibold text-slate-600">
               Top 10
             </span>
           </div>
 
-          {/* Multi-arc pie như ảnh mẫu */}
+          {/* Multi-arc pie - số lượng nhiều => cung dài tương ứng */}
           <div className="relative flex flex-col items-center justify-center py-2 flex-1">
             <div className="relative w-56 h-56 flex items-center justify-center">
-              {/* Nền vòng xám */}
-              <div className="absolute inset-0 rounded-full opacity-20" style={{ background: 'repeating-radial-gradient(circle at center, transparent 14px, #334155 15px, #334155 16px, transparent 16px, transparent 28px)' }} />
+              {/* Nền vòng xám nhạt cho thẻ trắng */}
+              <div className="absolute inset-0 rounded-full opacity-40" style={{ background: 'repeating-radial-gradient(circle at center, transparent 14px, #E2E8F0 15px, #E2E8F0 16px, transparent 16px, transparent 28px)' }} />
               <svg className="w-56 h-56 rotate-[-90deg]" viewBox="0 0 200 200">
-                {/* Vẽ 10 cung đồng tâm với màu neon, độ dài theo tỉ lệ vi phạm */}
+                {/* Vẽ 10 cung đồng tâm - mỗi MSNV một màu rõ ràng, độ dài tỉ lệ trực tiếp với số lần vi phạm */}
                 {(() => {
                   const max = Math.max(1, ...stats.topViolators.map(v => v.count));
-                  const colors = ['#00E5FF', '#7C4DFF', '#FF6D00', '#FF4081', '#FFEA00', '#00E676', '#2979FF', '#FF1744', '#651FFF', '#18FFFF'];
+                  // Bảng màu trực quan trên nền trắng, độ tương phản cao
+                  const colors = ['#0EA5E9', '#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#06B6D4', '#EC4899', '#6366F1', '#F97316', '#14B8A6'];
                   return stats.topViolators.slice(0, 10).map((v, i) => {
                     const radius = 75 - i * 6;
                     const circumference = 2 * Math.PI * radius;
                     const pct = v.count / max;
-                    // Mỗi cung dài pct * 0.85 vòng, chừa gap
+                    // Độ dài cung phản ánh trực tiếp số lượng: nhiều = dài, ít = ngắn (tối thiểu 12% vòng, tối đa 87%)
                     const dash = circumference * (0.12 + pct * 0.75);
                     const gap = circumference - dash;
-                    const rotate = i * 3; // lệch nhẹ để tạo hiệu ứng xoắn như mẫu
+                    const rotate = i * 3;
                     return (
                       <circle
                         key={v.employeeId}
@@ -493,47 +532,51 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                         strokeLinecap="round"
                         strokeDasharray={`${dash} ${gap}`}
                         strokeDashoffset={-rotate}
-                        style={{ filter: `drop-shadow(0 0 6px ${colors[i % colors.length]})`, opacity: 0.95 - i*0.05 }}
+                        style={{ filter: `drop-shadow(0 0 4px ${colors[i % colors.length]}66)`, opacity: 0.92 }}
                       />
                     );
                   });
                 })()}
-                {/* Vòng trung tâm TOP 10 */}
-                <circle cx="100" cy="100" r="38" fill="none" stroke="#FF3B30" strokeWidth="3" style={{ filter: 'drop-shadow(0 0 8px #FF3B30)' }} />
-                <circle cx="100" cy="100" r="32" fill="#0B1220" stroke="#FF3B30" strokeWidth="1" opacity={0.9} />
+                {/* Vòng trung tâm TOP 10 - nền trắng đồng bộ */}
+                <circle cx="100" cy="100" r="38" fill="none" stroke="#EF4444" strokeWidth="3" style={{ filter: 'drop-shadow(0 0 6px #EF444444)' }} />
+                <circle cx="100" cy="100" r="32" fill="#FFFFFF" stroke="#EF4444" strokeWidth="1" />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <div className="text-[10px] font-black tracking-widest text-white/90">TOP 10</div>
-                <div className="text-[10px] font-bold text-rose-400 tracking-wider">{language==='vi' ? 'VI PHẠM' : 'VIOLATORS'}</div>
+                <div className="text-[10px] font-black tracking-widest text-slate-700">TOP 10</div>
+                <div className="text-[10px] font-bold text-rose-500 tracking-wider">{language==='vi' ? 'VI PHẠM' : 'VIOLATORS'}</div>
               </div>
             </div>
 
-            {/* Legend top 10 theo mã NV */}
-            <div className="w-full mt-3 space-y-1 max-h-[120px] overflow-y-auto pr-1">
+            {/* Legend top 10 theo MSNV - màu sắc mô tả rõ ràng, trực quan */}
+            <div className="w-full mt-3 space-y-1 max-h-[132px] overflow-y-auto pr-1">
               {stats.topViolators.length === 0 ? (
-                <div className="text-[11px] text-white/60 text-center py-4">{language==='vi' ? 'Chưa có vi phạm trong tháng' : 'No violations this month'}</div>
+                <div className="text-[11px] text-slate-500 text-center py-4 bg-slate-50 rounded-xl border border-dashed">{language==='vi' ? 'Chưa có vi phạm trong tháng' : 'No violations this month'}</div>
               ) : (
-                stats.topViolators.map((v, i) => (
-                  <div key={v.employeeId} className="flex items-center justify-between text-[11px] bg-white/5 rounded-lg px-2.5 py-1 border border-white/10">
-                    <span className="font-mono font-bold text-white/90">{i+1}. {v.employeeId}</span>
-                    <span className="text-white/70 truncate ml-2">{v.fullName}</span>
-                    <span className="ml-auto font-black text-cyan-300">{v.count} {language==='vi' ? 'lần' : 'times'}</span>
-                  </div>
-                ))
+                (() => {
+                  const legendColors = ['#0EA5E9', '#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#06B6D4', '#EC4899', '#6366F1', '#F97316', '#14B8A6'];
+                  return stats.topViolators.map((v, i) => (
+                    <div key={v.employeeId} className="flex items-center gap-2 text-[11px] bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-200 hover:bg-slate-100 transition">
+                      <span className="w-3 h-3 rounded-full shrink-0 border border-white shadow-sm" style={{ backgroundColor: legendColors[i % legendColors.length] }} title={`Màu MSNV ${v.employeeId}`} />
+                      <span className="font-mono font-bold text-slate-800">{i+1}. {v.employeeId}</span>
+                      <span className="text-slate-500 truncate ml-1 flex-1">{v.fullName}</span>
+                      <span className="ml-auto font-black shrink-0" style={{ color: legendColors[i % legendColors.length] }}>{v.count} {language==='vi' ? 'lần' : 'times'}</span>
+                    </div>
+                  ));
+                })()
               )}
             </div>
           </div>
 
-          <button onClick={() => onNavigate('timesheet')} className="w-full mt-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold text-xs rounded-xl border border-white/20 transition text-center">
-            {language==='vi' ? 'Xem ma trận chấm công' : 'View Full Attendance Matrix'}
+          <button onClick={() => onNavigate('timesheet')} className="w-full mt-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition text-center shadow-sm">
+            {language==='vi' ? 'Xem bảng chấm công' : 'View Timesheet'}
           </button>
         </div>
 
-        {/* Column 3: Employees By Department - nghỉ chưa bù & nửa ngày */}
+        {/* Column 3: Danh sách nghỉ chưa bù phép (bao gồm nửa ngày) - theo kỳ công hiện tại */}
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-extrabold text-slate-900">{t('chartPendingHalfDay')}</h3>
-            <span className="text-xs font-bold text-slate-400">{language==='vi' ? 'Tháng' : 'Month'} {currentMonth}/{currentYear}</span>
+            <h3 className="text-sm font-extrabold text-slate-900 leading-tight">{t('chartPendingHalfDay')}</h3>
+            <span className="text-[11px] font-bold text-slate-400 shrink-0 ml-2 text-right">Kỳ {currentMonth}/{currentYear}<br/><span className="text-[10px] font-normal">{stats.officialPayLabel}</span></span>
           </div>
 
           <div className="space-y-3">
@@ -546,9 +589,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                     <span className="text-slate-700">{d.name}</span>
                     <span className="text-slate-900 font-extrabold">{d.total} {language==='vi' ? 'lượt' : 'cases'}</span>
                   </div>
-                  <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden flex">
-                    <div style={{ width: `${pendingPct}%` }} className="h-full bg-amber-500 transition-all" title={`Chưa bù: ${d.pending}`} />
-                    <div style={{ width: `${100 - pendingPct}%` }} className="h-full bg-blue-500 transition-all" title={`Nửa ngày: ${d.halfDay}`} />
+                  <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div style={{ width: `${pct}%` }} className="h-full flex rounded-full overflow-hidden transition-all duration-300">
+                      <div style={{ width: `${pendingPct}%` }} className="h-full bg-amber-500" title={`Chưa bù: ${d.pending}`} />
+                      <div style={{ width: `${100 - pendingPct}%` }} className="h-full bg-blue-500" title={`Nửa ngày: ${d.halfDay}`} />
+                    </div>
                   </div>
                   <div className="flex justify-between text-[10px] font-semibold">
                     <span className="text-amber-600">● {language==='vi' ? 'Chưa bù' : 'Pending'}: {d.pending}</span>
@@ -562,10 +607,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             )}
           </div>
           <div className="text-[11px] font-bold text-slate-500 mt-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-            {language==='vi' ? 'Ra sớm/về trễ >60p không tính trễ/sớm, tính là nửa ngày' : 'Early/late >60m counted as half-day, not late/early'}
+            {language==='vi' ? 'Dữ liệu theo tháng hiện tại, đồng bộ trực tiếp menu Chờ bù phép: duyệt = đã bù, chưa duyệt = chưa bù' : 'Monthly data synced directly from Pending Leave menu: approved = compensated, pending = uncompensated'}
           </div>
 
-          <button onClick={() => onNavigate('leavePending')} className="w-full mt-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition text-center">
+          <button onClick={() => onNavigate('leavePending')} className="w-full mt-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition text-center shadow-sm">
             {language==='vi' ? 'Xem danh sách chờ bù phép' : 'View Pending Leave'}
           </button>
         </div>

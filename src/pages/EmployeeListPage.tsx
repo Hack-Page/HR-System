@@ -13,7 +13,8 @@ import {
   CheckCircle2,
   XCircle,
   FileText,
-  SlidersHorizontal
+  SlidersHorizontal,
+  UserMinus
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -21,6 +22,7 @@ import { IEmployee, ShiftClassType, ContractType } from '../types';
 import { useToast } from '../context/ToastContext';
 import { useModal } from '../context/ModalContext';
 import { useAuth } from '../context/AuthContext';
+import { daysUntil } from '../services/pay-period';
 
 export const EmployeeListPage: React.FC = () => {
   const { success, warning, error } = useToast();
@@ -118,18 +120,37 @@ export const EmployeeListPage: React.FC = () => {
     }
   };
 
-  const handleDeleteEmployee = async (emp: IEmployee) => {
+  const handleResignEmployee = async (emp: IEmployee) => {
     const ok = await confirm({
-      title: 'Xác nhận xóa nhân viên',
-      message: `Bạn có chắc chắn muốn xóa nhân viên [${emp.employeeId}] ${emp.fullName} khỏi hệ thống không? Dữ liệu công liên quan cũng có thể bị ảnh hưởng.`,
-      confirmText: 'Xóa nhân viên',
+      title: 'Xác nhận cho nghỉ việc',
+      message: `Bạn có chắc chắn muốn cho nhân viên [${emp.employeeId}] ${emp.fullName} nghỉ việc? Thao tác sẽ cập nhật trạng thái RESIGNED và tính vào tỷ lệ nghỉ việc (KPI). Nhân viên sẽ được chuyển sang trạng thái đã nghỉ việc và ẩn khỏi danh sách hoạt động.`,
+      confirmText: 'Xác nhận nghỉ việc',
       cancelText: 'Hủy bỏ',
       type: 'danger'
     });
 
     if (ok) {
+      const today = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY
+      await db.employees.update(emp.employeeId, {
+        status: 'RESIGNED',
+        resignedDate: today
+      } as any);
+      success('Đã cho nghỉ việc', `Nhân viên ${emp.employeeId} - ${emp.fullName} đã được chuyển sang trạng thái nghỉ việc (RESIGNED) ngày ${today}. KPI tỷ lệ nghỉ việc sẽ tự động cập nhật theo kỳ công 21-20 / 01-31.`);
+    }
+  };
+
+  // Giữ hàm xóa cứng cho AD System nếu cần, nhưng nút chính là nghỉ việc
+  const handleDeleteEmployee = async (emp: IEmployee) => {
+    const ok = await confirm({
+      title: 'Xác nhận xóa vĩnh viễn',
+      message: `Bạn có chắc chắn muốn XÓA VĨNH VIỄN nhân viên [${emp.employeeId}] ${emp.fullName}? Hành động không thể hoàn tác.`,
+      confirmText: 'Xóa vĩnh viễn',
+      cancelText: 'Hủy bỏ',
+      type: 'danger'
+    });
+    if (ok) {
       await db.employees.delete(emp.employeeId);
-      success('Đã xóa nhân viên', `Nhân viên ${emp.employeeId} đã được xóa thành công.`);
+      success('Đã xóa nhân viên', `Nhân viên ${emp.employeeId} đã được xóa vĩnh viễn.`);
     }
   };
 
@@ -140,10 +161,10 @@ export const EmployeeListPage: React.FC = () => {
         <div>
           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Users className="w-5 h-5 text-orange-500" />
-            <span>Danh Mục Toàn Bộ Nhân Viên (Master Catalog & Classes)</span>
+            <span>Danh Mục Toàn Bộ Nhân Viên</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Quản lý quan hệ ca làm việc (Hành chính T2-T6 / T2-T7, Ca 1, Ca 2), chu kỳ tính công (Thời vụ 1-31 / Chính thức 21-20), phụ cấp PCCC/Độc hại và phép năm.
+            Quản lý quan hệ ca làm việc (Hành chính T2-T6 / T2-T7, Ca 1, Ca 2), chu kỳ tính công (Thời vụ 01-31 / Chính thức 21-20), phụ cấp PCCC/Độc hại, thử việc và phép năm.
           </p>
         </div>
 
@@ -231,6 +252,7 @@ export const EmployeeListPage: React.FC = () => {
                 <th className="py-3 px-4">Phòng Ban & Chức Vụ</th>
                 <th className="py-3 px-4 text-center">Nhóm Ca Làm Việc</th>
                 <th className="py-3 px-4 text-center">Hợp Đồng & Kỳ Công</th>
+                <th className="py-3 px-4 text-center">Thời gian hợp đồng</th>
                 <th className="py-3 px-4 text-center">Phụ Cấp Gắn Riêng</th>
                 <th className="py-3 px-4 text-center">Phép Năm Còn Lại</th>
                 <th className="py-3 px-4 text-center">Trạng Thái</th>
@@ -282,6 +304,49 @@ export const EmployeeListPage: React.FC = () => {
                           Thời vụ (1-31)
                         </span>
                       )}
+                      {emp.contractTerm && (
+                        <div className="text-[10px] text-slate-500 mt-1">
+                          {emp.contractTerm === '1_MONTH' ? 'HĐ 1 tháng' : emp.contractTerm === '2_MONTHS' ? 'HĐ 2 tháng' : emp.contractTerm === '1_YEAR' ? 'HĐ 1 năm' : emp.contractTerm === '3_YEARS' ? 'HĐ 3 năm' : 'HĐ vĩnh viễn'}
+                          {emp.contractEndDate ? ` • ${emp.contractEndDate}` : ''}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      {(() => {
+                        const now = new Date();
+                        const probDays = emp.probationEndDate ? daysUntil(emp.probationEndDate, now) : null;
+                        const isProbation = probDays !== null && probDays >= 0;
+                        if (isProbation && emp.probationMonths) {
+                          return (
+                            <>
+                              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold">
+                                Thử việc {emp.probationMonths} tháng
+                              </span>
+                              <div className="text-[10px] text-slate-400 mt-0.5">đến {emp.probationEndDate}</div>
+                            </>
+                          );
+                        }
+                        // Qua thử việc: hiển thị thời hạn hợp đồng sắp tới
+                        if (emp.contractEndDate) {
+                          const d = daysUntil(emp.contractEndDate, now);
+                          const label = emp.contractTerm === '1_MONTH' ? 'HĐ 1 tháng' : emp.contractTerm === '2_MONTHS' ? 'HĐ 2 tháng' : emp.contractTerm === '1_YEAR' ? 'HĐ 1 năm' : emp.contractTerm === '3_YEARS' ? 'HĐ 3 năm' : emp.contractTerm === 'PERMANENT' ? 'Vĩnh viễn' : 'HĐ';
+                          const isUrgent = d !== null && d >= 0 && d <= 15;
+                          const isWarn = d !== null && d >= 0 && d <= 30;
+                          return (
+                            <>
+                              <span className={`px-2 py-0.5 rounded-full border font-semibold ${isUrgent ? 'bg-rose-50 text-rose-700 border-rose-200' : isWarn ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                {label}
+                              </span>
+                              <div className="text-[10px] text-slate-500 mt-0.5">{emp.contractEndDate} {d !== null && d >= 0 ? `• còn ${d} ngày` : d !== null && d < 0 ? '• đã hết hạn' : ''}</div>
+                            </>
+                          );
+                        }
+                        if (emp.contractTerm) {
+                          const label = emp.contractTerm === '1_MONTH' ? 'HĐ 1 tháng' : emp.contractTerm === '2_MONTHS' ? 'HĐ 2 tháng' : emp.contractTerm === '1_YEAR' ? 'HĐ 1 năm' : emp.contractTerm === '3_YEARS' ? 'HĐ 3 năm' : 'Vĩnh viễn';
+                          return <span className="px-2 py-0.5 rounded-full bg-slate-50 text-slate-700 border font-medium">{label}</span>;
+                        }
+                        return <span className="text-slate-400 text-[11px]">—</span>;
+                      })()}
                     </td>
                     <td className="py-3 px-4 text-center">
                       <div className="flex items-center justify-center gap-1.5 flex-wrap">
@@ -331,13 +396,22 @@ export const EmployeeListPage: React.FC = () => {
                         >
                           <Edit className="w-3.5 h-3.5" />
                         </button>
+                        {hasPermission('MANAGE_EMPLOYEES') && emp.status !== 'RESIGNED' && (
+                          <button
+                            onClick={() => handleResignEmployee(emp)}
+                            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                            title="Cho nghỉ việc (tính KPI tỷ lệ nghỉ việc)"
+                          >
+                            <UserMinus className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {hasPermission('MANAGE_EMPLOYEES') && (
                           <button
                             onClick={() => handleDeleteEmployee(emp)}
-                            className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
-                            title="Xóa nhân viên"
+                            className="p-1.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            title="Xóa vĩnh viễn (AD System)"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3 h-3" />
                           </button>
                         )}
                       </div>
@@ -566,6 +640,99 @@ export const EmployeeListPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Hợp đồng & Thử việc */}
+              <div className="p-4 bg-amber-50/40 rounded-xl border border-amber-200/60 space-y-3">
+                <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-amber-600" />
+                  <span>Hợp Đồng & Thời Gian Thử Việc</span>
+                  <span className="ml-auto text-[10px] font-normal text-slate-500">Thử việc 1-2 tháng: không tính tăng ca & phép năm đến khi hết thử việc</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Thời hạn hợp đồng</label>
+                    <select
+                      value={editingEmployee.contractTerm || ''}
+                      onChange={(e) => {
+                        const term = e.target.value as any;
+                        let endDate = editingEmployee.contractEndDate;
+                        // Tự tính ngày kết thúc nếu có ngày bắt đầu
+                        if (term && editingEmployee.contractStartDate) {
+                          const s = editingEmployee.contractStartDate;
+                          const parse = (str:string) => {
+                            if (str.includes('/')) { const [d,m,y]=str.split('/').map(Number); return new Date(y,m-1,d); }
+                            if (str.includes('-')) { const [y,m,d]=str.split('-').map(Number); return new Date(y,m-1,d); }
+                            return null;
+                          };
+                          const sd = parse(s);
+                          if (sd) {
+                            const ed = new Date(sd);
+                            if (term === '1_MONTH') ed.setMonth(ed.getMonth()+1);
+                            else if (term === '2_MONTHS') ed.setMonth(ed.getMonth()+2);
+                            else if (term === '1_YEAR') ed.setFullYear(ed.getFullYear()+1);
+                            else if (term === '3_YEARS') ed.setFullYear(ed.getFullYear()+3);
+                            else if (term === 'PERMANENT') endDate = '';
+                            if (term !== 'PERMANENT') endDate = `${String(ed.getDate()).padStart(2,'0')}/${String(ed.getMonth()+1).padStart(2,'0')}/${ed.getFullYear()}`;
+                          }
+                        }
+                        setEditingEmployee({ ...editingEmployee, contractTerm: term || undefined, contractEndDate: endDate });
+                      }}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl"
+                    >
+                      <option value="">-- Chưa cấu hình --</option>
+                      <option value="1_MONTH">1 tháng</option>
+                      <option value="2_MONTHS">2 tháng</option>
+                      <option value="1_YEAR">1 năm</option>
+                      <option value="3_YEARS">3 năm</option>
+                      <option value="PERMANENT">Vĩnh viễn</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Thời gian thử việc</label>
+                    <select
+                      value={editingEmployee.probationMonths || ''}
+                      onChange={(e) => {
+                        const v = e.target.value ? parseInt(e.target.value) as 1|2 : undefined;
+                        let probEnd = editingEmployee.probationEndDate;
+                        if (v && editingEmployee.startDate) {
+                          const s = editingEmployee.startDate;
+                          const parse = (str:string) => {
+                            if (str.includes('/')) { const [d,m,y]=str.split('/').map(Number); return new Date(y,m-1,d); }
+                            if (str.includes('-')) { const [y,m,d]=str.split('-').map(Number); return new Date(y,m-1,d); }
+                            return null;
+                          };
+                          const sd = parse(s);
+                          if (sd) {
+                            const ed = new Date(sd);
+                            ed.setMonth(ed.getMonth()+v);
+                            probEnd = `${String(ed.getDate()).padStart(2,'0')}/${String(ed.getMonth()+1).padStart(2,'0')}/${ed.getFullYear()}`;
+                          }
+                        } else if (!v) probEnd = undefined;
+                        setEditingEmployee({ ...editingEmployee, probationMonths: v, probationEndDate: probEnd });
+                      }}
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl"
+                    >
+                      <option value="">Không thử việc</option>
+                      <option value="1">1 tháng</option>
+                      <option value="2">2 tháng</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Ngày bắt đầu HĐ</label>
+                    <input type="text" placeholder="DD/MM/YYYY" value={editingEmployee.contractStartDate || ''} onChange={e => setEditingEmployee({ ...editingEmployee, contractStartDate: e.target.value })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Ngày kết thúc HĐ</label>
+                    <input type="text" placeholder="DD/MM/YYYY" value={editingEmployee.contractEndDate || ''} onChange={e => setEditingEmployee({ ...editingEmployee, contractEndDate: e.target.value })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl" />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Kết thúc thử việc</label>
+                    <input type="text" placeholder="DD/MM/YYYY" value={editingEmployee.probationEndDate || ''} onChange={e => setEditingEmployee({ ...editingEmployee, probationEndDate: e.target.value })} className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-amber-700 font-semibold" />
+                  </div>
+                </div>
+              </div>
+
               {/* Custom Allowances Section */}
               <div className="p-4 bg-orange-50/40 rounded-xl border border-orange-200/60 space-y-3">
                 <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5 text-orange-950">
@@ -627,10 +794,12 @@ export const EmployeeListPage: React.FC = () => {
                   <label className="block font-bold text-slate-700 mb-1">Hạn Mức Phép Năm Ban Đầu (Ngày)</label>
                   <input
                     type="number"
-                    value={editingEmployee.annualLeaveBalance?.initialQuota || 12}
+                    min={0}
+                    value={editingEmployee.annualLeaveBalance?.initialQuota ?? 12}
                     onChange={(e) => {
-                      const init = parseFloat(e.target.value) || 0;
-                      const used = editingEmployee.annualLeaveBalance?.usedDays || 0;
+                      const raw = e.target.value;
+                      const init = raw === '' ? 0 : parseFloat(raw) || 0;
+                      const used = editingEmployee.annualLeaveBalance?.usedDays ?? 0;
                       setEditingEmployee({
                         ...editingEmployee,
                         annualLeaveBalance: {
@@ -647,14 +816,20 @@ export const EmployeeListPage: React.FC = () => {
                   <label className="block font-bold text-slate-700 mb-1">Số Phép Năm Còn Lại (Ngày)</label>
                   <input
                     type="number"
-                    value={editingEmployee.annualLeaveBalance?.remainingDays || 12}
-                    onChange={(e) => setEditingEmployee({
-                      ...editingEmployee,
-                      annualLeaveBalance: {
-                        ...editingEmployee.annualLeaveBalance,
-                        remainingDays: parseFloat(e.target.value) || 0
-                      }
-                    })}
+                    min={0}
+                    value={editingEmployee.annualLeaveBalance?.remainingDays ?? 12}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const val = raw === '' ? 0 : parseFloat(raw);
+                      const num = isNaN(val) ? 0 : val;
+                      setEditingEmployee({
+                        ...editingEmployee,
+                        annualLeaveBalance: {
+                          ...editingEmployee.annualLeaveBalance!,
+                          remainingDays: num
+                        }
+                      });
+                    }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-blue-600"
                   />
                 </div>
