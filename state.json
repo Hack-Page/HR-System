@@ -3,9 +3,9 @@
     "project_name": "SmartHR - Single-File In-Browser HRMS & Timekeeping System",
     "organization": "Leggett & Platt / SmartHR",
     "architecture": "Single-File In-Browser Backend (React + TypeScript + Web Worker + Dexie.js + ONNX Runtime Web Hybrid CDN)",
-    "last_updated": "2026-08-28T07:10:00Z",
-    "current_phase": "Phase 10: Dexie Schema v5 — shiftClasses + rbacRoles chuyên nghiệp (user confirmed 1.ok 2.ok), 69 tests green",
-    "version": "1.3.0"
+    "last_updated": "2026-08-28T07:50:00Z",
+    "current_phase": "Phase 11: Dexie v6 Boolean Index Fix — 5 Flag 0|1 chuyên nghiệp (61 tests green)",
+    "version": "1.3.1"
   },
   "agent_profile": {
     "role": "Senior Principal System Designer & Staff IT Software Engineer",
@@ -38,26 +38,27 @@
   "verified_schemas": {
     "db_name": "HRSystem_LeggettPlatt_DB",
     "db_file": "src/db/index.ts",
-    "current_version": 5,
+    "current_version": 6,
     "stores": {
       "employees": "employeeId PK, erpId, fullName, department, shiftClassId FK→shiftClasses.shiftClassId, contractType, status, [department+status], [contractType+status], [shiftClassId+status], [department+contractType]",
       "rawAttendanceLogs": "++id PK auto-increment, employeeId FK, date, [employeeId+date], departmentCode, [departmentCode+date]",
-      "dailyTimesheets": "employeeId_date PK composite, employeeId FK, date, statusCode, isViolation, month, year, [month+year], [employeeId+month+year], [statusCode+month+year], [isViolation+month+year]",
+      "dailyTimesheets": "employeeId_date PK composite, employeeId FK, date, statusCode, isViolation (boolean giữ UI), isViolationFlag 0|1 indexed, month, year, [month+year], [employeeId+month+year], [statusCode+month+year], [isViolationFlag+month+year]",
       "overtimeRecords": "employeeId_date PK composite, employeeId FK, date, verificationStatus, month, year, [month+year], [employeeId+month+year], [verificationStatus+month+year]",
       "leaveRequests": "id PK string, employeeId FK, date, leaveType, status, department, [status+date], [employeeId+status], [department+status]",
-      "shiftRosters": "employeeId_date PK composite, employeeId FK, date, shiftCode FK→shiftClasses.shiftClassId, isRestViolation, department, [isRestViolation+date], [department+date]",
+      "shiftRosters": "employeeId_date PK composite, employeeId FK, date, shiftCode FK→shiftClasses.shiftClassId, isRestViolation (boolean giữ UI), isRestViolationFlag 0|1 indexed, department, [isRestViolationFlag+date], [department+date]",
       "ocrScans": "id PK, extractedEmployeeId, extractedDate, matchStatus, scanTimestamp, [matchStatus+scanTimestamp]",
       "settings": "key PK",
-      "accounts": "username PK, role FK→rbacRoles.roleId, active, [role+active]",
-      "shiftClasses": "shiftClassId PK, startTime, endTime, standardWorkDays, isRotating, workDaysPattern — 4 ca mặc định OFFICE_M_F/M_S/SHIFT_1/2, cho phép custom SHIFT_3+",
-      "rbacRoles": "roleId PK, roleName, *permissions multiEntry, isSystem — 6 roles built-in từ DEFAULT_SETTINGS.rolePermissions, cho phép custom role"
+      "accounts": "username PK, role FK→rbacRoles.roleId, active (boolean giữ UI), activeFlag 0|1 indexed, [role+activeFlag]",
+      "shiftClasses": "shiftClassId PK, startTime, endTime, standardWorkDays, isRotating (boolean), isRotatingFlag 0|1 indexed, workDaysPattern",
+      "rbacRoles": "roleId PK, roleName, *permissions multiEntry, isSystem (boolean), isSystemFlag 0|1 indexed"
     },
     "persistent_storage": {
       "helper": "ensurePersistentStorage() in src/db/index.ts + call in src/main.tsx bootstrap, fallback warning via Toast if denied",
       "quota": "getStorageEstimate() — warn 80%, block import 95%"
     },
-    "naming_convention_note": "SKILL quy ước snake_case nhưng giữ camelCase store names để không mất IndexedDB người dùng cũ (đã ship v2/v3). Field camelCase, date YYYY-MM-DD cho index. shiftClasses/rbacRoles mới cũng dùng camelCase cho nhất quán.",
+    "naming_convention_note": "SKILL quy ước snake_case nhưng giữ camelCase store names để không mất IndexedDB người dùng cũ (đã ship v2/v3). Field camelCase, date YYYY-MM-DD cho index. Flag 0|1 là Number hợp lệ IndexedDB, boolean gốc giữ lại cho UI/logic.",
     "erd_mermaid": "erDiagram EMPLOYEES ||--o{ RAW_ATTENDANCE_LOGS : employeeId; EMPLOYEES ||--o{ DAILY_TIMESHEETS : employeeId; EMPLOYEES ||--o{ OVERTIME_RECORDS : employeeId; EMPLOYEES ||--o{ LEAVE_REQUESTS : employeeId; EMPLOYEES ||--o{ SHIFT_ROSTER_ENTRIES : employeeId; EMPLOYEES }o--|| SHIFT_CLASSES : shiftClassId; DAILY_TIMESHEETS ||--o| OVERTIME_RECORDS : employeeId_date; SHIFT_CLASSES ||--o{ SHIFT_ROSTER_ENTRIES : shiftCode; RBAC_ROLES ||--o{ ACCOUNTS : roleId;",
+    "flag_migration_note": "v6: 5 field boolean (isViolation, isRestViolation, active, isRotating, isSystem) không phải key hợp lệ IndexedDB → thêm shadow Flag Number 0|1, đổi index sang Flag, upgrade modify Flag=boolean?1:0, hooks creating/updating tự đồng bộ.",
     "future_pending_stores": {
       "auditLogs": "User chọn không cần (3.không cần) — không tạo"
     }
@@ -139,6 +140,18 @@
         "Indexes: shiftClasses[isRotating], rbacRoles[*permissions] multiEntry cho query 'ai có quyền MANAGE_OT'",
         "OneDrive snapshot v3 chuẩn bị mở rộng để backup shiftClasses/rbacRoles (accounts vẫn local-only)",
         "Vitest v5 tests: FK integrity, multiEntry permissions, isRotating filter (69 tests total)"
+      ]
+    },
+    "M11_Dexie_v6_Boolean_Index_Fix_2026_08_28": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": [
+        "Sửa lỗi IndexedDB spec: boolean không phải key hợp lệ → thêm 5 Flag 0|1 (isViolationFlag, isRestViolationFlag, activeFlag, isRotatingFlag, isSystemFlag), giữ boolean gốc cho UI",
+        "v6 stores: đổi index sang Flag (isViolation→isViolationFlag, [isViolation+month+year]→[isViolationFlag+month+year]...), upgrade modify Flag=boolean?1:0 cho 5 field/5 store, hooks creating/updating tự đồng bộ",
+        "Grep toàn bộ src: 7 file writer (worker, Header, AttendanceViolation, ShiftAssignment, ShiftRoster, db-seeder, AuthContext, db-sync) đã đồng thời set Flag, Sidebar where('isRestViolationFlag').equals(1), .filter() giữ nguyên",
+        "db.test.ts deterministic: xóa fallback 3 tầng, assert thẳng where('isViolationFlag').equals(1) etc., thêm test upgrade transform old records",
+        "Kiểm tra sort: không có logic nào sort theo boolean cũ cần hỏi lại — ánh xạ true→1, false→0 giữ thứ tự",
+        "Vitest 61 tests green, tsc + vite build OK"
       ]
     }
   }

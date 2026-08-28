@@ -204,22 +204,26 @@ export const Header: React.FC = () => {
                 ts.lateMinutes = late;
                 ts.earlyMinutes = early;
               }
-              // Xác định mã LA/ED theo ngưỡng 30 phút
+              // Xác định mã LA/ED theo ngưỡng 30 phút — đồng thời set Flag 0|1 cho index v6
               if (late > 0 && late < 30) {
                 ts.statusCode = 'LA';
                 ts.isViolation = true;
+                ts.isViolationFlag = 1;
                 ts.violationNote = `Đi làm trễ ${late} phút (Late arrival) - ca ${start} | vào ${checkIn}`;
               } else if (late >= 30) {
                 ts.statusCode = 'LA';
                 ts.isViolation = true;
+                ts.isViolationFlag = 1;
                 ts.violationNote = `Đi làm trễ ${late} phút (Late arrival) - trên 30 phút → chờ duyệt phép - ca ${start} | vào ${checkIn}`;
               } else if (early > 0 && early < 30) {
                 ts.statusCode = 'ED';
                 ts.isViolation = true;
+                ts.isViolationFlag = 1;
                 ts.violationNote = `Về sớm ${early} phút (Early departure) - ca ${end} | ra ${checkOut}`;
               } else if (early >= 30) {
                 ts.statusCode = 'ED';
                 ts.isViolation = true;
+                ts.isViolationFlag = 1;
                 ts.violationNote = `Về sớm ${early} phút (Early departure) - trên 30 phút → chờ duyệt phép - ca ${end} | ra ${checkOut}`;
               } else {
                 // Không trễ sớm -> giữ W/N nhưng nếu đang là LA/ED do file cũ thì chuyển về W
@@ -231,8 +235,11 @@ export const Header: React.FC = () => {
                   else ts.statusCode = 'W';
                   ts.violationNote = undefined;
                   ts.isViolation = false;
+                  ts.isViolationFlag = 0;
                 }
               }
+              // Đảm bảo Flag luôn đồng bộ nếu isViolation chưa được set ở branch trên
+              if (typeof ts.isViolationFlag === 'undefined') ts.isViolationFlag = ts.isViolation ? 1 : 0;
             }
 
             // 3. PH tự động: ngày thường (T2-T7, trừ CN) không có quẹt thẻ nào trên toàn công ty -> PH cho tất cả
@@ -275,6 +282,7 @@ export const Header: React.FC = () => {
                       existing.statusCode = 'PH';
                       existing.violationNote = 'Nghỉ lễ - cả công ty nghỉ (tự động - ngày thường không có quẹt thẻ)';
                       existing.isViolation = false;
+                      existing.isViolationFlag = 0;
                     }
                   } else {
                     postTimesheets.push({
@@ -288,6 +296,7 @@ export const Header: React.FC = () => {
                       lateMinutes: 0,
                       earlyMinutes: 0,
                       isViolation: false,
+                      isViolationFlag: 0,
                       violationNote: 'Nghỉ lễ - cả công ty nghỉ (tự động)',
                       calculatedOvertime: 0,
                       month: m,
@@ -306,6 +315,10 @@ export const Header: React.FC = () => {
             warning('Lưu ý xử lý hậu kỳ', postErr.message || 'Lỗi khi đối chiếu ca/phép, vẫn tiến hành lưu dữ liệu gốc.');
           }
 
+          // v6: đảm bảo mọi timesheet đều có Flag trước khi bulkPut (phòng worker cũ thiếu Flag)
+          for (const ts of postTimesheets) {
+            if (typeof ts.isViolationFlag === 'undefined') ts.isViolationFlag = ts.isViolation ? 1 : 0;
+          }
           setImportStatusText('Đang lưu vào cơ sở dữ liệu Dexie.js (IndexedDB)...');
 
           // Bulk put to Dexie.js

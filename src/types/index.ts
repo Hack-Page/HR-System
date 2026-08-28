@@ -13,7 +13,8 @@ export interface IAccount {
   role: RoleType;
   salt: string;              // hex 16 bytes
   passwordHash: string;      // hex SHA-256(salt || password)
-  active: boolean;
+  active: boolean;           // giữ boolean gốc cho UI/logic
+  activeFlag: 0 | 1;         // shadow 0|1 CHỈ để index — IndexedDB không cho boolean làm key
   createdAt: string;
   lastLoginAt?: string;
 }
@@ -126,7 +127,8 @@ export interface IDailyTimesheetCell {
   checkOut?: string;
   lateMinutes?: number;
   earlyMinutes?: number;
-  isViolation?: boolean;
+  isViolation?: boolean;      // giữ boolean gốc cho UI
+  isViolationFlag?: 0 | 1;    // shadow 0|1 CHỈ để index
   violationNote?: string;
   calculatedOvertime: number;
   month: number;
@@ -180,7 +182,8 @@ export interface IShiftRosterEntry {
   endTime: string;            // 14:00, 22:00, 16:00
   previousShiftEndTime?: string; // Giờ kết thúc ca trước
   restHours?: number;         // Khoảng nghỉ giữa 2 ca
-  isRestViolation: boolean;   // true nếu restHours < 12
+  isRestViolation: boolean;   // giữ boolean gốc
+  isRestViolationFlag: 0 | 1; // shadow 0|1 CHỈ để index
   violationDetails?: string;
 }
 
@@ -205,7 +208,8 @@ export interface IShiftClass {
   endTime: string;            // HH:mm
   standardWorkDays: number;   // 23 (MON_FRI) hoặc 27 (MON_SAT/ROTATING)
   workDaysPattern: 'MON_FRI' | 'MON_SAT' | 'ROTATING';
-  isRotating: boolean;        // true cho SHIFT_1/2 xoay ca
+  isRotating: boolean;        // giữ boolean gốc
+  isRotatingFlag: 0 | 1;      // shadow 0|1 CHỈ để index
   description?: string;
   color?: string;             // hex cho badge UI
   createdAt: string;          // ISO
@@ -218,7 +222,8 @@ export interface IRbacRole {
   description?: string;
   permissions: string[];      // vd: ['VIEW_DASHBOARD', 'MANAGE_EMPLOYEES']
   departmentScope?: string | null; // null = toàn công ty, else 'Production'...
-  isSystem: boolean;          // true cho 6 role built-in, false cho custom
+  isSystem: boolean;          // giữ boolean gốc
+  isSystemFlag: 0 | 1;        // shadow 0|1 CHỈ để index
   createdAt: string;
   updatedAt?: string;
 }

@@ -39,21 +39,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onSelectPage }) =>
   const { t } = useLanguage();
   const { session, currentRole } = useAuth();
 
-  // Combined live badges query - gộp 4 query thành 1 để giảm IndexedDB reads
-  // v4: dùng index thay filter để tránh full scan (isRestViolation + statusCode đã index)
+  // v6: dùng Flag 0|1 thay boolean để index hợp lệ (IndexedDB chỉ cho Number/String/Date)
   const badgeCounts = useLiveQuery(async () => {
-    const countRestViolation = async () => {
-      try {
-        const c1 = await (db.shiftRosters as any).where('isRestViolation').equals(true).count();
-        if (c1 > 0) return c1;
-        return await db.shiftRosters.where('isRestViolation').equals(1 as any).count();
-      } catch {
-        return db.shiftRosters.filter(item => Boolean(item.isRestViolation)).count();
-      }
-    };
     const [pendingLeave, violations, pendingOT, attendanceViolations] = await Promise.all([
       db.leaveRequests.where('status').equals('PENDING').count(),
-      countRestViolation(),
+      db.shiftRosters.where('isRestViolationFlag').equals(1).count(),
       db.overtimeRecords.where('verificationStatus').equals('PENDING').count(),
       db.dailyTimesheets.where('statusCode').anyOf(['LA','ED','MCO','MCI']).count(),
     ]);

@@ -150,6 +150,12 @@ export async function importDatabaseFromSnapshot(file: File): Promise<{
 
   const { data, settings, skipped } = validateSnapshot(raw);
 
+  // v6: backfill Flag cho snapshot cũ thiếu Flag (v2 không có Flag)
+  for (const r of (data as any).dailyTimesheets as any[]) if (typeof r.isViolationFlag === 'undefined') r.isViolationFlag = r.isViolation ? 1 : 0;
+  for (const r of (data as any).shiftRosters as any[]) if (typeof r.isRestViolationFlag === 'undefined') r.isRestViolationFlag = r.isRestViolation ? 1 : 0;
+  for (const r of (data as any).shiftClasses as any[]) if (typeof r.isRotatingFlag === 'undefined') r.isRotatingFlag = r.isRotating ? 1 : 0;
+  for (const r of (data as any).rbacRoles as any[]) if (typeof r.isSystemFlag === 'undefined') r.isSystemFlag = r.isSystem ? 1 : 0;
+
   // Toàn bộ thay thế nằm trong một transaction - fail ở bất kỳ đâu sẽ rollback toàn bộ
   // v5: thêm shiftClasses/rbacRoles vào sync (accounts vẫn local-only không sync)
   await db.transaction(
@@ -187,10 +193,10 @@ export async function importDatabaseFromSnapshot(file: File): Promise<{
         if (scCount === 0) {
           const now = new Date().toISOString();
           await db.shiftClasses.bulkPut([
-            { shiftClassId: 'OFFICE_M_F', labelVi: 'HC Văn phòng (T2-T6 | 23 công)', labelEn: 'Office Mon-Fri', startTime: '07:30', endTime: '16:00', standardWorkDays: 23, workDaysPattern: 'MON_FRI', isRotating: false, createdAt: now },
-            { shiftClassId: 'OFFICE_M_S', labelVi: 'HC Chung (T2-T7 | 27 công)', labelEn: 'Office Mon-Sat', startTime: '07:30', endTime: '16:00', standardWorkDays: 27, workDaysPattern: 'MON_SAT', isRotating: false, createdAt: now },
-            { shiftClassId: 'SHIFT_1', labelVi: 'Ca 1 (06:00 - 14:00)', labelEn: 'Shift 1', startTime: '06:00', endTime: '14:00', standardWorkDays: 27, workDaysPattern: 'ROTATING', isRotating: true, createdAt: now },
-            { shiftClassId: 'SHIFT_2', labelVi: 'Ca 2 (14:00 - 22:00)', labelEn: 'Shift 2', startTime: '14:00', endTime: '22:00', standardWorkDays: 27, workDaysPattern: 'ROTATING', isRotating: true, createdAt: now }
+            { shiftClassId: 'OFFICE_M_F', labelVi: 'HC Văn phòng (T2-T6 | 23 công)', labelEn: 'Office Mon-Fri', startTime: '07:30', endTime: '16:00', standardWorkDays: 23, workDaysPattern: 'MON_FRI', isRotating: false, isRotatingFlag: 0, createdAt: now },
+            { shiftClassId: 'OFFICE_M_S', labelVi: 'HC Chung (T2-T7 | 27 công)', labelEn: 'Office Mon-Sat', startTime: '07:30', endTime: '16:00', standardWorkDays: 27, workDaysPattern: 'MON_SAT', isRotating: false, isRotatingFlag: 0, createdAt: now },
+            { shiftClassId: 'SHIFT_1', labelVi: 'Ca 1 (06:00 - 14:00)', labelEn: 'Shift 1', startTime: '06:00', endTime: '14:00', standardWorkDays: 27, workDaysPattern: 'ROTATING', isRotating: true, isRotatingFlag: 1, createdAt: now },
+            { shiftClassId: 'SHIFT_2', labelVi: 'Ca 2 (14:00 - 22:00)', labelEn: 'Shift 2', startTime: '14:00', endTime: '22:00', standardWorkDays: 27, workDaysPattern: 'ROTATING', isRotating: true, isRotatingFlag: 1, createdAt: now }
           ] as any);
         }
       }
@@ -199,7 +205,7 @@ export async function importDatabaseFromSnapshot(file: File): Promise<{
         if (rcCount === 0) {
           const now = new Date().toISOString();
           const perms = DEFAULT_SETTINGS.rolePermissions as Record<string, string[]>;
-          await db.rbacRoles.bulkPut(Object.entries(perms).map(([roleId, permissions]) => ({ roleId, roleName: roleId, permissions, isSystem: true, createdAt: now })) as any);
+          await db.rbacRoles.bulkPut(Object.entries(perms).map(([roleId, permissions]) => ({ roleId, roleName: roleId, permissions, isSystem: true, isSystemFlag: 1, createdAt: now })) as any);
         }
       }
     }

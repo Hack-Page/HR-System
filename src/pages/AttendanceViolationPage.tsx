@@ -92,6 +92,7 @@ export const AttendanceViolationPage: React.FC = () => {
       ...cell,
       statusCode: newCode,
       isViolation: false,
+      isViolationFlag: 0,
       violationNote: newCode === 'W' ? `Đã xác thực thủ công - duyệt ${cell.statusCode} → W (${new Date().toLocaleDateString('vi-VN')})` : `Đã duyệt ${cell.statusCode} → ${newCode}`,
     };
     // Nếu duyệt về W thì giữ nguyên checkIn/checkOut, clear lateMinutes nếu cần? Giữ lại để trace.

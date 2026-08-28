@@ -29,7 +29,13 @@ const DEFAULT_ADMIN_PASSWORD = 'admin123';
 
 async function ensureDefaultAdmin(): Promise<void> {
   const existing = await db.accounts.get(DEFAULT_ADMIN_USERNAME);
-  if (existing) return;
+  if (existing) {
+    // v6 backfill Flag nếu tài khoản cũ thiếu
+    if (typeof (existing as any).activeFlag === 'undefined') {
+      await db.accounts.update(DEFAULT_ADMIN_USERNAME, { activeFlag: existing.active ? 1 : 0 } as any);
+    }
+    return;
+  }
   const salt = generateSalt();
   const account: IAccount = {
     username: DEFAULT_ADMIN_USERNAME,
@@ -38,6 +44,7 @@ async function ensureDefaultAdmin(): Promise<void> {
     salt,
     passwordHash: await hashPassword(DEFAULT_ADMIN_PASSWORD, salt),
     active: true,
+    activeFlag: 1,
     createdAt: new Date().toISOString(),
   };
   await db.accounts.put(account);
@@ -179,6 +186,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       salt,
       passwordHash: await hashPassword(password, salt),
       active: true,
+      activeFlag: 1,
       createdAt: new Date().toISOString(),
     };
     await db.accounts.put(account);

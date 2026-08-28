@@ -176,6 +176,7 @@ self.onmessage = async (e: MessageEvent<{ buffer: ArrayBuffer; month: number; ye
         lateMinutes: lateMins,
         earlyMinutes: earlyMins,
         isViolation,
+        isViolationFlag: isViolation ? 1 : 0,
         violationNote,
         calculatedOvertime: otHours,
         month,

@@ -212,6 +212,7 @@ export const ShiftAssignmentPage: React.FC = () => {
           previousShiftEndTime: prevEnd,
           restHours: isViolating ? 8 : 16,
           isRestViolation: isViolating,
+          isRestViolationFlag: isViolating ? 1 : 0,
           violationDetails: isViolating ? 'Nghỉ 8 giờ giữa Ca 2 (kết thúc 22h) và Ca 1 (bắt đầu 06h) < 12h' : undefined,
         });
       }

@@ -33,6 +33,13 @@ import {
  * - v5 (2026-08-28): THÊM 2 STORE CHUYÊN NGHIỆP — shiftClasses + rbacRoles theo SKILL ERD
  *       (Plan.md §3.2, §4.1 đã chốt field sau clarification của user 1.ok 2.ok 3.không cần auditLogs).
  *       Seed mặc định 4 ca + 6 roles từ DEFAULT_SETTINGS nếu store trống, không đè dữ liệu cũ.
+ * - v6 (2026-08-28): SỬA LỖI BOOLEAN INDEX — 5 field boolean không phải key hợp lệ IndexedDB
+ *       (spec chỉ cho Number/Date/String/Binary/Array) nên chuyển sang shadow Flag 0|1:
+ *       isViolation → isViolationFlag, isRestViolation → isRestViolationFlag,
+ *       active → activeFlag, isRotating → isRotatingFlag, isSystem → isSystemFlag.
+ *       Giữ nguyên field boolean gốc cho UI/logic, chỉ đổi index sang Flag.
+ *       Upgrade transform thật: modify mọi record cũ v2-v5 để Flag = boolean ? 1 : 0,
+ *       không để index mới thiếu dữ liệu.
  */
 
 export class HRSystemDatabase extends Dexie {
@@ -180,6 +187,69 @@ export class HRSystemDatabase extends Dexie {
         }));
         await (tx as any).table('rbacRoles').bulkPut(roles);
       }
+    });
+
+    // v6: SỬA LỖI BOOLEAN INDEX — boolean không phải key hợp lệ IndexedDB (chỉ Number/Date/String/Binary/Array)
+    // Chuyển 5 field boolean sang shadow Flag 0|1 để index: isViolation→isViolationFlag,
+    // isRestViolation→isRestViolationFlag, active→activeFlag, isRotating→isRotatingFlag, isSystem→isSystemFlag.
+    // Giữ nguyên field boolean gốc cho UI/logic, chỉ đổi index sang Flag.
+    this.version(6).stores({
+      dailyTimesheets:
+        'employeeId_date, employeeId, date, statusCode, isViolationFlag, month, year, [month+year], [employeeId+month+year], [statusCode+month+year], [employeeId+date], [isViolationFlag+month+year]',
+      shiftRosters:
+        'employeeId_date, employeeId, date, shiftCode, isRestViolationFlag, department, [isRestViolationFlag+date], [department+date], [shiftCode+date]',
+      accounts: 'username, role, activeFlag, [role+activeFlag]',
+      shiftClasses: 'shiftClassId, startTime, endTime, standardWorkDays, isRotatingFlag, workDaysPattern',
+      rbacRoles: 'roleId, roleName, *permissions, isSystemFlag'
+    }).upgrade(async tx => {
+      // Transform dữ liệu cũ v2-v5: mọi record thiếu Flag sẽ được set Flag = boolean ? 1 : 0
+      await (tx as any).table('dailyTimesheets').toCollection().modify((rec: any) => {
+        if (typeof rec.isViolationFlag === 'undefined') rec.isViolationFlag = rec.isViolation ? 1 : 0;
+      });
+      await (tx as any).table('shiftRosters').toCollection().modify((rec: any) => {
+        if (typeof rec.isRestViolationFlag === 'undefined') rec.isRestViolationFlag = rec.isRestViolation ? 1 : 0;
+      });
+      await (tx as any).table('accounts').toCollection().modify((rec: any) => {
+        if (typeof rec.activeFlag === 'undefined') rec.activeFlag = rec.active ? 1 : 0;
+      });
+      await (tx as any).table('shiftClasses').toCollection().modify((rec: any) => {
+        if (typeof rec.isRotatingFlag === 'undefined') rec.isRotatingFlag = rec.isRotating ? 1 : 0;
+      });
+      await (tx as any).table('rbacRoles').toCollection().modify((rec: any) => {
+        if (typeof rec.isSystemFlag === 'undefined') rec.isSystemFlag = rec.isSystem ? 1 : 0;
+      });
+    });
+
+    // Hooks tự đồng bộ Flag khi tạo/cập nhật — đảm bảo không sót chỗ set tay (v6)
+    this.dailyTimesheets.hook('creating', (_p: any, obj: any) => {
+      if (typeof obj.isViolationFlag === 'undefined') obj.isViolationFlag = obj.isViolation ? 1 : 0;
+    });
+    this.dailyTimesheets.hook('updating', (mods: any) => {
+      if ('isViolation' in mods && !('isViolationFlag' in mods)) mods.isViolationFlag = mods.isViolation ? 1 : 0;
+    });
+    this.shiftRosters.hook('creating', (_p: any, obj: any) => {
+      if (typeof obj.isRestViolationFlag === 'undefined') obj.isRestViolationFlag = obj.isRestViolation ? 1 : 0;
+    });
+    this.shiftRosters.hook('updating', (mods: any) => {
+      if ('isRestViolation' in mods && !('isRestViolationFlag' in mods)) mods.isRestViolationFlag = mods.isRestViolation ? 1 : 0;
+    });
+    this.accounts.hook('creating', (_p: any, obj: any) => {
+      if (typeof obj.activeFlag === 'undefined') obj.activeFlag = obj.active ? 1 : 0;
+    });
+    this.accounts.hook('updating', (mods: any) => {
+      if ('active' in mods && !('activeFlag' in mods)) mods.activeFlag = mods.active ? 1 : 0;
+    });
+    this.shiftClasses.hook('creating', (_p: any, obj: any) => {
+      if (typeof obj.isRotatingFlag === 'undefined') obj.isRotatingFlag = obj.isRotating ? 1 : 0;
+    });
+    this.shiftClasses.hook('updating', (mods: any) => {
+      if ('isRotating' in mods && !('isRotatingFlag' in mods)) mods.isRotatingFlag = mods.isRotating ? 1 : 0;
+    });
+    this.rbacRoles.hook('creating', (_p: any, obj: any) => {
+      if (typeof obj.isSystemFlag === 'undefined') obj.isSystemFlag = obj.isSystem ? 1 : 0;
+    });
+    this.rbacRoles.hook('updating', (mods: any) => {
+      if ('isSystem' in mods && !('isSystemFlag' in mods)) mods.isSystemFlag = mods.isSystem ? 1 : 0;
     });
   }
 }
