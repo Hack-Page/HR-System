@@ -9,10 +9,10 @@
  *    trừ bảng accounts (tài khoản đăng nhập là dữ liệu cục bộ của từng máy)
  */
 import { db } from '../db';
-import { IEmployee, IDailyTimesheetCell, IOvertimeRecord, ILeaveRequest, IShiftRosterEntry, IOCREntry, ISystemSettings } from '../types';
+import { IEmployee, IDailyTimesheetCell, IOvertimeRecord, ILeaveRequest, IShiftRosterEntry, IOCREntry, ISystemSettings, IShiftClass, IRbacRole } from '../types';
 import { DEFAULT_SETTINGS } from '../db';
 
-export const SNAPSHOT_VERSION = '2.0.0';
+export const SNAPSHOT_VERSION = '3.0.0';
 
 export interface IDatabaseSnapshot {
   version: string;
@@ -25,6 +25,9 @@ export interface IDatabaseSnapshot {
   shiftRosters: IShiftRosterEntry[];
   ocrScans: IOCREntry[];
   settings?: ISystemSettings;
+  // v3: thêm master data mới — optional để tương thích snapshot v2 cũ
+  shiftClasses?: IShiftClass[];
+  rbacRoles?: IRbacRole[];
 }
 
 // ---------------------------------------------------------------------------
@@ -42,7 +45,9 @@ export async function exportDatabaseToSnapshot(userName: string = 'HR Admin'): P
     leaveRequests: await db.leaveRequests.toArray(),
     shiftRosters: await db.shiftRosters.toArray(),
     ocrScans: await db.ocrScans.toArray(),
-    settings: ((await db.settings.get('systemSettings'))?.value as ISystemSettings) || undefined
+    settings: ((await db.settings.get('systemSettings'))?.value as ISystemSettings) || undefined,
+    shiftClasses: await db.shiftClasses.toArray(),
+    rbacRoles: await db.rbacRoles.toArray()
   };
 
   const jsonStr = JSON.stringify(snapshot, null, 2);
@@ -67,7 +72,10 @@ function isNonEmptyString(v: unknown): v is string {
 }
 
 interface ValidatedSnapshot {
-  data: Required<Pick<IDatabaseSnapshot, 'employees' | 'dailyTimesheets' | 'overtimeRecords' | 'leaveRequests' | 'shiftRosters' | 'ocrScans'>>;
+  data: Required<Pick<IDatabaseSnapshot, 'employees' | 'dailyTimesheets' | 'overtimeRecords' | 'leaveRequests' | 'shiftRosters' | 'ocrScans'>> & {
+    shiftClasses: IShiftClass[];
+    rbacRoles: IRbacRole[];
+  };
   settings?: ISystemSettings;
   skipped: Record<string, number>;
 }
@@ -83,8 +91,8 @@ function validateSnapshot(raw: unknown): ValidatedSnapshot {
     throw new Error('Tệp thiếu trường "version" - không phải snapshot của hệ thống.');
   }
   const major = parseInt(obj.version.split('.')[0], 10);
-  if (!Number.isFinite(major) || major < 1 || major > 2) {
-    throw new Error(`Phiên bản snapshot "${obj.version}" không được hỗ trợ (hỗ trợ 1.x - 2.x).`);
+  if (!Number.isFinite(major) || major < 1 || major > 3) {
+    throw new Error(`Phiên bản snapshot "${obj.version}" không được hỗ trợ (hỗ trợ 1.x - 3.x).`);
   }
 
   const skipped: Record<string, number> = {};
@@ -104,7 +112,9 @@ function validateSnapshot(raw: unknown): ValidatedSnapshot {
     overtimeRecords: pickArray<IOvertimeRecord>('overtimeRecords', o => isNonEmptyString(o.employeeId_date) && typeof o.hours === 'number'),
     leaveRequests: pickArray<ILeaveRequest>('leaveRequests', l => isNonEmptyString(l.id)),
     shiftRosters: pickArray<IShiftRosterEntry>('shiftRosters', s => isNonEmptyString(s.employeeId_date)),
-    ocrScans: pickArray<IOCREntry>('ocrScans', o => isNonEmptyString(o.id))
+    ocrScans: pickArray<IOCREntry>('ocrScans', o => isNonEmptyString(o.id)),
+    shiftClasses: pickArray<IShiftClass>('shiftClasses', s => isNonEmptyString(s.shiftClassId) && isNonEmptyString(s.startTime)),
+    rbacRoles: pickArray<IRbacRole>('rbacRoles', r => isNonEmptyString(r.roleId) && Array.isArray((r as any).permissions))
   };
 
   let settings: ISystemSettings | undefined;
@@ -141,9 +151,10 @@ export async function importDatabaseFromSnapshot(file: File): Promise<{
   const { data, settings, skipped } = validateSnapshot(raw);
 
   // Toàn bộ thay thế nằm trong một transaction - fail ở bất kỳ đâu sẽ rollback toàn bộ
+  // v5: thêm shiftClasses/rbacRoles vào sync (accounts vẫn local-only không sync)
   await db.transaction(
     'rw',
-    [db.employees, db.dailyTimesheets, db.overtimeRecords, db.leaveRequests, db.shiftRosters, db.ocrScans, db.settings],
+    [db.employees, db.dailyTimesheets, db.overtimeRecords, db.leaveRequests, db.shiftRosters, db.ocrScans, db.settings, db.shiftClasses, db.rbacRoles],
     async () => {
       await Promise.all([
         db.employees.clear(),
@@ -151,7 +162,9 @@ export async function importDatabaseFromSnapshot(file: File): Promise<{
         db.overtimeRecords.clear(),
         db.leaveRequests.clear(),
         db.shiftRosters.clear(),
-        db.ocrScans.clear()
+        db.ocrScans.clear(),
+        db.shiftClasses.clear(),
+        db.rbacRoles.clear()
       ]);
 
       await Promise.all([
@@ -160,11 +173,34 @@ export async function importDatabaseFromSnapshot(file: File): Promise<{
         data.overtimeRecords.length && db.overtimeRecords.bulkPut(data.overtimeRecords),
         data.leaveRequests.length && db.leaveRequests.bulkPut(data.leaveRequests),
         data.shiftRosters.length && db.shiftRosters.bulkPut(data.shiftRosters),
-        data.ocrScans.length && db.ocrScans.bulkPut(data.ocrScans)
+        data.ocrScans.length && db.ocrScans.bulkPut(data.ocrScans),
+        (data as any).shiftClasses?.length && db.shiftClasses.bulkPut((data as any).shiftClasses),
+        (data as any).rbacRoles?.length && db.rbacRoles.bulkPut((data as any).rbacRoles)
       ]);
 
       if (settings) {
         await db.settings.put({ key: 'systemSettings', value: settings });
+      }
+      // Nếu snapshot v2 cũ không có shiftClasses/rbacRoles thì re-seed mặc định để không trống
+      if (!(data as any).shiftClasses?.length) {
+        const scCount = await db.shiftClasses.count();
+        if (scCount === 0) {
+          const now = new Date().toISOString();
+          await db.shiftClasses.bulkPut([
+            { shiftClassId: 'OFFICE_M_F', labelVi: 'HC Văn phòng (T2-T6 | 23 công)', labelEn: 'Office Mon-Fri', startTime: '07:30', endTime: '16:00', standardWorkDays: 23, workDaysPattern: 'MON_FRI', isRotating: false, createdAt: now },
+            { shiftClassId: 'OFFICE_M_S', labelVi: 'HC Chung (T2-T7 | 27 công)', labelEn: 'Office Mon-Sat', startTime: '07:30', endTime: '16:00', standardWorkDays: 27, workDaysPattern: 'MON_SAT', isRotating: false, createdAt: now },
+            { shiftClassId: 'SHIFT_1', labelVi: 'Ca 1 (06:00 - 14:00)', labelEn: 'Shift 1', startTime: '06:00', endTime: '14:00', standardWorkDays: 27, workDaysPattern: 'ROTATING', isRotating: true, createdAt: now },
+            { shiftClassId: 'SHIFT_2', labelVi: 'Ca 2 (14:00 - 22:00)', labelEn: 'Shift 2', startTime: '14:00', endTime: '22:00', standardWorkDays: 27, workDaysPattern: 'ROTATING', isRotating: true, createdAt: now }
+          ] as any);
+        }
+      }
+      if (!(data as any).rbacRoles?.length) {
+        const rcCount = await db.rbacRoles.count();
+        if (rcCount === 0) {
+          const now = new Date().toISOString();
+          const perms = DEFAULT_SETTINGS.rolePermissions as Record<string, string[]>;
+          await db.rbacRoles.bulkPut(Object.entries(perms).map(([roleId, permissions]) => ({ roleId, roleName: roleId, permissions, isSystem: true, createdAt: now })) as any);
+        }
       }
     }
   );

@@ -3,9 +3,9 @@
     "project_name": "SmartHR - Single-File In-Browser HRMS & Timekeeping System",
     "organization": "Leggett & Platt / SmartHR",
     "architecture": "Single-File In-Browser Backend (React + TypeScript + Web Worker + Dexie.js + ONNX Runtime Web Hybrid CDN)",
-    "last_updated": "2026-08-26T01:50:00Z",
-    "current_phase": "Phase 8: Architecture Review Fixes Applied (FORMULA_DEFS single source, dynamic calendar 21-20/1-31, worker pool 3/3, hybrid OCR REAL_ONNX+fallback, dynamic RBAC from Dexie, Vitest 32 tests green)",
-    "version": "1.1.0"
+    "last_updated": "2026-08-28T07:10:00Z",
+    "current_phase": "Phase 10: Dexie Schema v5 — shiftClasses + rbacRoles chuyên nghiệp (user confirmed 1.ok 2.ok), 69 tests green",
+    "version": "1.3.0"
   },
   "agent_profile": {
     "role": "Senior Principal System Designer & Staff IT Software Engineer",
@@ -33,6 +33,33 @@
       "overtime_rounding": "Exact calculation without rounding blocks (e.g. 23 mins = 23/60 = 0.38h, exact standard overtime)",
       "annual_leave_quota": "Fully flexible: configurable upon creation and editable by HR Manager role",
       "diligence_reduction_rules": "Default applies company-wide, but fully customizable per department or employee class module"
+    }
+  },
+  "verified_schemas": {
+    "db_name": "HRSystem_LeggettPlatt_DB",
+    "db_file": "src/db/index.ts",
+    "current_version": 5,
+    "stores": {
+      "employees": "employeeId PK, erpId, fullName, department, shiftClassId FK→shiftClasses.shiftClassId, contractType, status, [department+status], [contractType+status], [shiftClassId+status], [department+contractType]",
+      "rawAttendanceLogs": "++id PK auto-increment, employeeId FK, date, [employeeId+date], departmentCode, [departmentCode+date]",
+      "dailyTimesheets": "employeeId_date PK composite, employeeId FK, date, statusCode, isViolation, month, year, [month+year], [employeeId+month+year], [statusCode+month+year], [isViolation+month+year]",
+      "overtimeRecords": "employeeId_date PK composite, employeeId FK, date, verificationStatus, month, year, [month+year], [employeeId+month+year], [verificationStatus+month+year]",
+      "leaveRequests": "id PK string, employeeId FK, date, leaveType, status, department, [status+date], [employeeId+status], [department+status]",
+      "shiftRosters": "employeeId_date PK composite, employeeId FK, date, shiftCode FK→shiftClasses.shiftClassId, isRestViolation, department, [isRestViolation+date], [department+date]",
+      "ocrScans": "id PK, extractedEmployeeId, extractedDate, matchStatus, scanTimestamp, [matchStatus+scanTimestamp]",
+      "settings": "key PK",
+      "accounts": "username PK, role FK→rbacRoles.roleId, active, [role+active]",
+      "shiftClasses": "shiftClassId PK, startTime, endTime, standardWorkDays, isRotating, workDaysPattern — 4 ca mặc định OFFICE_M_F/M_S/SHIFT_1/2, cho phép custom SHIFT_3+",
+      "rbacRoles": "roleId PK, roleName, *permissions multiEntry, isSystem — 6 roles built-in từ DEFAULT_SETTINGS.rolePermissions, cho phép custom role"
+    },
+    "persistent_storage": {
+      "helper": "ensurePersistentStorage() in src/db/index.ts + call in src/main.tsx bootstrap, fallback warning via Toast if denied",
+      "quota": "getStorageEstimate() — warn 80%, block import 95%"
+    },
+    "naming_convention_note": "SKILL quy ước snake_case nhưng giữ camelCase store names để không mất IndexedDB người dùng cũ (đã ship v2/v3). Field camelCase, date YYYY-MM-DD cho index. shiftClasses/rbacRoles mới cũng dùng camelCase cho nhất quán.",
+    "erd_mermaid": "erDiagram EMPLOYEES ||--o{ RAW_ATTENDANCE_LOGS : employeeId; EMPLOYEES ||--o{ DAILY_TIMESHEETS : employeeId; EMPLOYEES ||--o{ OVERTIME_RECORDS : employeeId; EMPLOYEES ||--o{ LEAVE_REQUESTS : employeeId; EMPLOYEES ||--o{ SHIFT_ROSTER_ENTRIES : employeeId; EMPLOYEES }o--|| SHIFT_CLASSES : shiftClassId; DAILY_TIMESHEETS ||--o| OVERTIME_RECORDS : employeeId_date; SHIFT_CLASSES ||--o{ SHIFT_ROSTER_ENTRIES : shiftCode; RBAC_ROLES ||--o{ ACCOUNTS : roleId;",
+    "future_pending_stores": {
+      "auditLogs": "User chọn không cần (3.không cần) — không tạo"
     }
   },
   "modules_status": {
@@ -90,6 +117,29 @@
       "status": "COMPLETED",
       "completion_pct": 100,
       "features": ["Web Worker Stream Chunking for 20k rows", "ExcelJS Styled Exporter with Leggett.jpg logo and formulas"]
+    },
+    "M9_Dexie_v4_Hardening_2026_08_28": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": [
+        "v4 compound indexes: [month+year], [employeeId+month+year], [statusCode+month+year] cho timesheet/OT/leave/shift",
+        "Sidebar badge queries chuyển sang where().anyOf() / where('isRestViolation') dùng index thay filter scan",
+        "ensurePersistentStorage() + getStorageEstimate() theo SKILL §4bis, gọi ở src/main.tsx bootstrap",
+        "state.json verified_schemas + ERD đồng bộ, future stores (shiftClasses/rbacRoles/auditLogs) ghi rõ cần clarification",
+        "Vitest DB tests mới cho init/bulkPut/compound index (src/db/db.test.ts) — 58 tests"
+      ]
+    },
+    "M10_Dexie_v5_ShiftClasses_Rbac_2026_08_28": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": [
+        "v5: 2 store mới shiftClasses (4 ca chuẩn OFFICE_M_F/M_S/SHIFT_1/2 + custom) và rbacRoles (6 roles built-in + custom), theo SKILL ERD §3 đã chốt clarification 1.ok 2.ok",
+        "Types IShiftClass/IRbacRole trong src/types/index.ts, FK giả lập shiftClassId/roleId trùng PK bảng cha",
+        "Migration v5 seed idempotent: upgrade() bulkPut 4 ca + 6 roles nếu trống, không đè dữ liệu cũ; db-seeder fallback seed cho fresh install",
+        "Indexes: shiftClasses[isRotating], rbacRoles[*permissions] multiEntry cho query 'ai có quyền MANAGE_OT'",
+        "OneDrive snapshot v3 chuẩn bị mở rộng để backup shiftClasses/rbacRoles (accounts vẫn local-only)",
+        "Vitest v5 tests: FK integrity, multiEntry permissions, isRotating filter (69 tests total)"
+      ]
     }
   }
 }

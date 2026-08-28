@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { db, DEFAULT_SETTINGS } from '../db';
 import initialEmployees from '../data/initial-employees.json';
 import initialTimesheets from '../data/initial-timesheets.json';
 import initialOvertimes from '../data/initial-overtimes.json';
@@ -80,5 +80,32 @@ export async function seedDatabaseIfEmpty() {
     await db.leaveRequests.bulkPut(leaveRequests);
 
     console.log('Database seeded successfully!');
+  }
+
+  // v5: đảm bảo shiftClasses + rbacRoles luôn có seed dù upgrade không chạy (fresh install cũ bỏ qua version)
+  const scCount = await db.shiftClasses.count();
+  if (scCount === 0) {
+    const now = new Date().toISOString();
+    await db.shiftClasses.bulkPut([
+      { shiftClassId: 'OFFICE_M_F', labelVi: 'HC Văn phòng (T2-T6 | 23 công)', labelEn: 'Office Mon-Fri (23 WDs)', startTime: '07:30', endTime: '16:00', standardWorkDays: 23, workDaysPattern: 'MON_FRI', isRotating: false, description: 'Hành chính văn phòng Thứ 2-6', color: '#3B82F6', createdAt: now },
+      { shiftClassId: 'OFFICE_M_S', labelVi: 'HC Chung (T2-T7 | 27 công)', labelEn: 'Office Mon-Sat (27 WDs)', startTime: '07:30', endTime: '16:00', standardWorkDays: 27, workDaysPattern: 'MON_SAT', isRotating: false, description: 'Hành chính chung Thứ 2-7', color: '#64748B', createdAt: now },
+      { shiftClassId: 'SHIFT_1', labelVi: 'Ca 1 (06:00 - 14:00)', labelEn: 'Shift 1 (06:00 - 14:00)', startTime: '06:00', endTime: '14:00', standardWorkDays: 27, workDaysPattern: 'ROTATING', isRotating: true, description: 'Xoay ca sáng', color: '#6366F1', createdAt: now },
+      { shiftClassId: 'SHIFT_2', labelVi: 'Ca 2 (14:00 - 22:00)', labelEn: 'Shift 2 (14:00 - 22:00)', startTime: '14:00', endTime: '22:00', standardWorkDays: 27, workDaysPattern: 'ROTATING', isRotating: true, description: 'Xoay ca chiều', color: '#EC4899', createdAt: now }
+    ] as any);
+  }
+  const roleCount = await db.rbacRoles.count();
+  if (roleCount === 0) {
+    const now = new Date().toISOString();
+    const perms = DEFAULT_SETTINGS.rolePermissions as Record<string, string[]>;
+    const roles: any[] = Object.entries(perms).map(([roleId, permissions]) => ({
+      roleId,
+      roleName: roleId,
+      description: roleId === 'AD System' ? 'Super Admin — toàn quyền hệ thống' : roleId === 'HR Manager' ? 'HR Manager — toàn quyền HR' : `${roleId} — quyền theo phòng ban`,
+      permissions,
+      departmentScope: roleId.includes('Warehouse') ? 'WH' : roleId.includes('Production') ? 'Production' : roleId.includes('QC') ? 'QC' : null,
+      isSystem: true,
+      createdAt: now
+    }));
+    await db.rbacRoles.bulkPut(roles);
   }
 }

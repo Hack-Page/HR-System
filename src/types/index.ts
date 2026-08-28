@@ -197,6 +197,32 @@ export interface IOCREntry {
   details?: string;
 }
 
+export interface IShiftClass {
+  shiftClassId: string;       // PK: OFFICE_M_F, OFFICE_M_S, SHIFT_1, SHIFT_2 hoặc custom SHIFT_3...
+  labelVi: string;            // vd: Ca 1 (06:00 - 14:00)
+  labelEn: string;            // vd: Shift 1 (06:00 - 14:00)
+  startTime: string;          // HH:mm
+  endTime: string;            // HH:mm
+  standardWorkDays: number;   // 23 (MON_FRI) hoặc 27 (MON_SAT/ROTATING)
+  workDaysPattern: 'MON_FRI' | 'MON_SAT' | 'ROTATING';
+  isRotating: boolean;        // true cho SHIFT_1/2 xoay ca
+  description?: string;
+  color?: string;             // hex cho badge UI
+  createdAt: string;          // ISO
+  updatedAt?: string;
+}
+
+export interface IRbacRole {
+  roleId: string;             // PK: HR Manager, HR Admin,... hoặc custom role
+  roleName: string;           // Display name
+  description?: string;
+  permissions: string[];      // vd: ['VIEW_DASHBOARD', 'MANAGE_EMPLOYEES']
+  departmentScope?: string | null; // null = toàn công ty, else 'Production'...
+  isSystem: boolean;          // true cho 6 role built-in, false cho custom
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface ISystemSettings {
   overtimeRounding: 'exact' | '15min' | '30min';
   defaultAnnualLeaveQuota: number;

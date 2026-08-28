@@ -8,8 +8,32 @@ import {
   IShiftRosterEntry,
   IOCREntry,
   ISystemSettings,
-  IAccount
+  IAccount,
+  IShiftClass,
+  IRbacRole
 } from '../types';
+
+/**
+ * HRSystemDatabase — Local-First IndexedDB cho SMART HR (Leggett & Platt)
+ *
+ * Domain: Single-File In-Browser Backend — 100% offline, không server.
+ * Naming: giữ camelCase store names để không mất dữ liệu người dùng cũ
+ * (SKILL quy ước snake_case nhưng đổi tên store = mất toàn bộ IndexedDB cũ → giữ nguyên).
+ *
+ * Version history:
+ * - v1 (legacy SKILL mẫu): baseline employees/rawLogs/timesheets/overtimes theo Plan.md §2.1
+ * - v2: employees(dailyTimesheets...), rawAttendanceLogs, dailyTimesheets, overtimeRecords,
+ *       leaveRequests, shiftRosters, ocrScans, settings — đã ship production
+ * - v3: thêm accounts (username PK) cho local auth — đã ship production
+ * - v4 (2026-08-28): CHUẨN HOÁ INDEX CHUYÊN NGHIỆP — thêm compound indexes cho mọi query
+ *       nóng của Dashboard/Sidebar/Timesheet để tránh full scan khi scale >100k rows.
+ *       Không đổi tên store, không xoá field, chỉ thêm index → không cần transform dữ liệu,
+ *       upgrade callback giữ trống nhưng vẫn bump version để Dexie rebuild index an toàn.
+ *       Đồng thời bổ sung helpers persistent storage + quota estimate theo SKILL §4bis.
+ * - v5 (2026-08-28): THÊM 2 STORE CHUYÊN NGHIỆP — shiftClasses + rbacRoles theo SKILL ERD
+ *       (Plan.md §3.2, §4.1 đã chốt field sau clarification của user 1.ok 2.ok 3.không cần auditLogs).
+ *       Seed mặc định 4 ca + 6 roles từ DEFAULT_SETTINGS nếu store trống, không đè dữ liệu cũ.
+ */
 
 export class HRSystemDatabase extends Dexie {
   employees!: Table<IEmployee, string>;
@@ -21,10 +45,13 @@ export class HRSystemDatabase extends Dexie {
   ocrScans!: Table<IOCREntry, string>;
   settings!: Table<{ key: string; value: any }, string>;
   accounts!: Table<IAccount, string>;
+  shiftClasses!: Table<IShiftClass, string>;
+  rbacRoles!: Table<IRbacRole, string>;
 
   constructor() {
     super('HRSystem_LeggettPlatt_DB');
 
+    // v2: baseline theo code đã ship — giữ nguyên để không gãy IndexedDB người dùng cũ
     this.version(2).stores({
       employees: 'employeeId, erpId, fullName, department, shiftClassId, contractType, status',
       rawAttendanceLogs: '++id, employeeId, date, [employeeId+date], departmentCode',
@@ -36,14 +63,172 @@ export class HRSystemDatabase extends Dexie {
       settings: 'key'
     });
 
-    // v3: bảng tài khoản đăng nhập cục bộ
+    // v3: bảng tài khoản đăng nhập cục bộ (local auth) — đã ship
     this.version(3).stores({
       accounts: 'username, role'
+    });
+
+    // v4: CHUẨN HOÁ INDEX CHUYÊN NGHIỆP — tối ưu cho query nóng, không mất dữ liệu
+    // Mỗi index mới gắn với 1 use-case thật (grep src/pages, src/components/layout):
+    // - employees: lọc theo department/shift/contract/status + badge đếm
+    // - dailyTimesheets: lọc theo month+year, employeeId+month+year, statusCode (LA/ED/MCO/MCI)
+    // - overtimeRecords: verificationStatus (PENDING) + month+year
+    // - leaveRequests: status PENDING + department + employeeId
+    // - shiftRosters: isRestViolation (<12h) + department
+    // - ocrScans: matchStatus + scanTimestamp
+    // - accounts: active + [role+active] cho RBAC đếm
+    this.version(4).stores({
+      employees:
+        'employeeId, erpId, fullName, department, shiftClassId, contractType, status, [department+status], [contractType+status], [shiftClassId+status], [department+contractType]',
+      rawAttendanceLogs:
+        '++id, employeeId, date, [employeeId+date], departmentCode, [departmentCode+date]',
+      dailyTimesheets:
+        'employeeId_date, employeeId, date, statusCode, isViolation, month, year, [month+year], [employeeId+month+year], [statusCode+month+year], [employeeId+date], [isViolation+month+year]',
+      overtimeRecords:
+        'employeeId_date, employeeId, date, verificationStatus, month, year, [month+year], [employeeId+month+year], [verificationStatus+month+year], [employeeId+verificationStatus]',
+      leaveRequests:
+        'id, employeeId, date, leaveType, status, department, [status+date], [employeeId+status], [department+status], [leaveType+status]',
+      shiftRosters:
+        'employeeId_date, employeeId, date, shiftCode, isRestViolation, department, [isRestViolation+date], [department+date], [shiftCode+date]',
+      ocrScans:
+        'id, extractedEmployeeId, extractedDate, matchStatus, scanTimestamp, [matchStatus+scanTimestamp]',
+      settings: 'key',
+      accounts: 'username, role, active, [role+active]'
+    }).upgrade(async _tx => {
+      // Không cần transform dữ liệu — chỉ rebuild index.
+      // Giữ callback rỗng nhưng khai báo để Dexie biết đây là migration có chủ đích,
+      // tránh auto-migration ngầm khi user mở DB cũ (v2/v3) lên v4.
+    });
+
+    // v5: THÊM 2 STORE CHUYÊN NGHIỆP — shiftClasses + rbacRoles (đã chốt sau clarification)
+    // Seed mặc định nếu trống, không đè dữ liệu cũ — đảm bảo người dùng cũ không mất data.
+    this.version(5).stores({
+      shiftClasses: 'shiftClassId, startTime, endTime, standardWorkDays, isRotating, workDaysPattern',
+      rbacRoles: 'roleId, roleName, *permissions, isSystem'
+    }).upgrade(async tx => {
+      const now = new Date().toISOString();
+      // Seed shiftClasses nếu trống
+      const scCount = await (tx as any).table('shiftClasses').count();
+      if (scCount === 0) {
+        await (tx as any).table('shiftClasses').bulkPut([
+          {
+            shiftClassId: 'OFFICE_M_F',
+            labelVi: 'HC Văn phòng (T2-T6 | 23 công)',
+            labelEn: 'Office Mon-Fri (23 WDs)',
+            startTime: '07:30',
+            endTime: '16:00',
+            standardWorkDays: 23,
+            workDaysPattern: 'MON_FRI',
+            isRotating: false,
+            description: 'Hành chính văn phòng Thứ 2-6, nghỉ T7-CN',
+            color: '#3B82F6',
+            createdAt: now
+          },
+          {
+            shiftClassId: 'OFFICE_M_S',
+            labelVi: 'HC Chung (T2-T7 | 27 công)',
+            labelEn: 'Office Mon-Sat (27 WDs)',
+            startTime: '07:30',
+            endTime: '16:00',
+            standardWorkDays: 27,
+            workDaysPattern: 'MON_SAT',
+            isRotating: false,
+            description: 'Hành chính chung Thứ 2-7, nghỉ CN',
+            color: '#64748B',
+            createdAt: now
+          },
+          {
+            shiftClassId: 'SHIFT_1',
+            labelVi: 'Ca 1 (06:00 - 14:00)',
+            labelEn: 'Shift 1 (06:00 - 14:00)',
+            startTime: '06:00',
+            endTime: '14:00',
+            standardWorkDays: 27,
+            workDaysPattern: 'ROTATING',
+            isRotating: true,
+            description: 'Xoay ca sáng, nghỉ CN',
+            color: '#6366F1',
+            createdAt: now
+          },
+          {
+            shiftClassId: 'SHIFT_2',
+            labelVi: 'Ca 2 (14:00 - 22:00)',
+            labelEn: 'Shift 2 (14:00 - 22:00)',
+            startTime: '14:00',
+            endTime: '22:00',
+            standardWorkDays: 27,
+            workDaysPattern: 'ROTATING',
+            isRotating: true,
+            description: 'Xoay ca chiều, nghỉ CN',
+            color: '#EC4899',
+            createdAt: now
+          }
+        ]);
+      }
+      // Seed rbacRoles nếu trống — từ DEFAULT_SETTINGS.rolePermissions (6 roles built-in)
+      const roleCount = await (tx as any).table('rbacRoles').count();
+      if (roleCount === 0) {
+        const perms = DEFAULT_SETTINGS.rolePermissions as Record<string, string[]>;
+        const roles: any[] = Object.entries(perms).map(([roleId, permissions]) => ({
+          roleId,
+          roleName: roleId,
+          description: roleId === 'AD System' ? 'Super Admin — toàn quyền hệ thống' : roleId === 'HR Manager' ? 'HR Manager — toàn quyền HR' : `${roleId} — quyền theo phòng ban`,
+          permissions,
+          departmentScope: roleId.includes('Warehouse') ? 'WH' : roleId.includes('Production') ? 'Production' : roleId.includes('QC') ? 'QC' : null,
+          isSystem: true,
+          createdAt: now
+        }));
+        await (tx as any).table('rbacRoles').bulkPut(roles);
+      }
     });
   }
 }
 
 export const db = new HRSystemDatabase();
+
+// ---------------------------------------------------------------------------
+// Persistent Storage & Quota — SKILL §4bis (bắt buộc vì 100% offline)
+// ---------------------------------------------------------------------------
+
+/**
+ * Xin quyền persistent storage để trình duyệt không tự xoá IndexedDB khi thiếu dung lượng.
+ * Gọi 1 lần ở bootstrap (main.tsx / App.tsx) TRƯỚC khi mở Dexie.
+ * @returns true nếu đã persistent hoặc vừa xin được, false nếu trình duyệt từ chối (cần cảnh báo backup)
+ */
+export async function ensurePersistentStorage(): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.storage?.persist) return false;
+  try {
+    const already = await navigator.storage.persisted();
+    if (already) return true;
+    return await navigator.storage.persist();
+  } catch {
+    return false;
+  }
+}
+
+export interface StorageEstimate {
+  usage?: number;
+  quota?: number;
+  percentUsed: number | null;
+}
+
+/**
+ * Giám sát quota IndexedDB — cảnh báo trước khi import Excel >20k dòng.
+ * Ngưỡng khuyến nghị: 80% cảnh báo, 95% chặn import mới.
+ */
+export async function getStorageEstimate(): Promise<StorageEstimate | null> {
+  if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return null;
+  try {
+    const { usage, quota } = await navigator.storage.estimate();
+    return {
+      usage,
+      quota,
+      percentUsed: quota && usage ? (usage / quota) * 100 : null
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Default initial settings
 export const DEFAULT_SETTINGS: ISystemSettings = {
