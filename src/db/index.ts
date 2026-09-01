@@ -319,5 +319,16 @@ export const DEFAULT_SETTINGS: ISystemSettings = {
     'Production Admin': ['VIEW_DEPT_DASHBOARD', 'VIEW_DEPT_EMPLOYEES', 'VIEW_DEPT_TIMESHEET', 'PROPOSE_DEPT_OT', 'VIEW_DEPT_LEAVE', 'MANAGE_DEPT_ROSTER', 'SCAN_DEPT_OCR'],
     'QC Admin': ['VIEW_DEPT_DASHBOARD', 'VIEW_DEPT_EMPLOYEES', 'VIEW_DEPT_TIMESHEET', 'PROPOSE_DEPT_OT', 'VIEW_DEPT_LEAVE', 'MANAGE_DEPT_ROSTER', 'SCAN_DEPT_OCR'],
     'AD System': ['ALL_ACCESS', 'SYSTEM_SETTINGS', 'MANAGE_ROLES_PERMISSIONS']
+  },
+  productivityBonusConfig: {
+    defaultBaseRate: 1000000,
+    formula: '(TotalWD + TotalAL) * BaseRate / StandardWD  →  (AO+AP)*BF/AN',
+    useDepartmentOverride: false,
+    departmentBaseRates: {}
+  },
+  diligenceBonusConfig: {
+    baseAmount: 500000,
+    countRange: 'J:AM',
+    countOffAsUL: true
   }
 };

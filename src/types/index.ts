@@ -238,4 +238,17 @@ export interface ISystemSettings {
   }[];
   nightShiftAllowanceRate: number; // Tỷ lệ phụ cấp ca đêm
   rolePermissions: Record<RoleType, string[]>;
+  // Công thức tiền năng suất AW = (AO+AP)*BF/AN — hệ thống hoá để custom ở Settings
+  productivityBonusConfig: {
+    defaultBaseRate: number;           // BF mặc định cho NV mới (vd 1.000.000)
+    formula: string;                   // mô tả công thức, vd "(TotalWD+TotalAL)*BaseRate/StandardWD"
+    useDepartmentOverride: boolean;
+    departmentBaseRates?: Record<string, number>; // override theo phòng ban nếu bật
+  };
+  // Công thức tiền chuyên cần AX = baseAmount * (1 - IF(UL>=2,0.5, IF(UL>=3,1,0)))
+  diligenceBonusConfig: {
+    baseAmount: number;                // 500000 mặc định, custom được
+    countRange: 'I:AM' | 'J:AM';       // phạm vi COUNTIF trong Excel (J:AM khớp file gốc, I:AM cho toàn kỳ)
+    countOffAsUL: boolean;             // có tính Off như UL không
+  };
 }

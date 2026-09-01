@@ -26,10 +26,19 @@ export interface ITimesheetSummary {
   tradeUnionFee: number;
 }
 
+export interface ComputeSummaryOptions {
+  diligenceRules?: { twoDaysULPenaltyPct: number; threeDaysULPenaltyPct: number };
+  diligenceBaseAmount?: number;
+  productivityBaseRate?: number;
+  productivityConfig?: { defaultBaseRate: number; formula: string };
+}
+
 export function computeEmployeeTimesheetSummary(
   employee: IEmployee,
   cells: IDailyTimesheetCell[],
-  customDiligenceRules?: { twoDaysULPenaltyPct: number; threeDaysULPenaltyPct: number }
+  customDiligenceRules?: { twoDaysULPenaltyPct: number; threeDaysULPenaltyPct: number } | ComputeSummaryOptions,
+  diligenceBaseOverride?: number,
+  productivityBaseOverride?: number
 ): ITimesheetSummary {
   // Standard WD
   let standardWD = 23;
@@ -115,13 +124,23 @@ export function computeEmployeeTimesheetSummary(
   const specialPaidLeavePL = FORMULA_DEFS.specialPaidLeavePL.jsCompute(bag);
   const nightShiftsCount = FORMULA_DEFS.nightShiftsCount.jsCompute(bag);
 
-  // Calculate Diligence Bonus with UL deductions
-  // Ground truth formula from sheet Thai san:
-  // =(AO+AP)*(500000*(1-IF(COUNTIF("UL")>=2, IF(COUNTIF("UL")>=3, 1, 0.5), 0))) / StandardWD
-  const baseDiligence = employee.customAllowances?.diligenceBonus ?? 500000;
+  // Resolve options compat (legacy 3rd param was {p2,p3} directly)
+  let opts: ComputeSummaryOptions = {};
+  if (customDiligenceRules && typeof (customDiligenceRules as any).twoDaysULPenaltyPct === 'number' && !('diligenceRules' in (customDiligenceRules as any))) {
+    opts.diligenceRules = customDiligenceRules as any;
+    if (typeof diligenceBaseOverride === 'number') opts.diligenceBaseAmount = diligenceBaseOverride;
+    if (typeof productivityBaseOverride === 'number') opts.productivityBaseRate = productivityBaseOverride;
+  } else if (customDiligenceRules && typeof customDiligenceRules === 'object') {
+    opts = customDiligenceRules as ComputeSummaryOptions;
+  }
+
+  // Calculate Diligence Bonus with UL deductions — hệ thống hoá để custom ở Settings
+  // Excel gốc: =500000*(1-IF(COUNTIF(J13:AM13,"UL")>=2,IF(COUNTIF(J13:AM13,"UL")>=3,1,0.5),0))
+  // BaseAmount lấy từ Settings.diligenceBonusConfig.baseAmount hoặc per-employee customAllowances.diligenceBonus
+  const baseDiligence = opts.diligenceBaseAmount ?? employee.customAllowances?.diligenceBonus ?? 500000;
   let diligenceMultiplier = 1;
-  const p2 = customDiligenceRules?.twoDaysULPenaltyPct ?? 50;
-  const p3 = customDiligenceRules?.threeDaysULPenaltyPct ?? 100;
+  const p2 = opts.diligenceRules?.twoDaysULPenaltyPct ?? 50;
+  const p3 = opts.diligenceRules?.threeDaysULPenaltyPct ?? 100;
 
   if (unpaidLeaveUL >= 3) {
     diligenceMultiplier = Math.max(0, 1 - (p3 / 100));
@@ -129,12 +148,18 @@ export function computeEmployeeTimesheetSummary(
     diligenceMultiplier = Math.max(0, 1 - (p2 / 100));
   }
 
-  // Prorated by actual work days if applicable
   const diligenceBonus = Math.round(baseDiligence * diligenceMultiplier);
+
+  // Tính tiền năng suất AW = (AO+AP)*BF/AN — hệ thống hoá, không khóa cứng
+  // BF = productivityBaseRate: lấy per-employee productivityBonus làm baseRate, fallback Settings.defaultBaseRate
+  const baseRate = opts.productivityBaseRate ?? employee.customAllowances?.productivityBonus ?? opts.productivityConfig?.defaultBaseRate ?? 1000000;
+  // Nếu baseRate=0 (NV không có thưởng năng suất) thì AW=0, không chia
+  const productivityBonus = standardWD > 0 && baseRate > 0
+    ? Math.round((actualWD + annualLeaveAL) * baseRate / standardWD)
+    : 0;
 
   const hazardousAllowance = employee.customAllowances?.hazardousAllowance || 0;
   const pcccAllowance = employee.customAllowances?.pcccAllowance || 0;
-  const productivityBonus = employee.customAllowances?.productivityBonus || 0;
   const otherFees = employee.customAllowances?.otherFees || 0;
   const tradeUnionFee = employee.customAllowances?.tradeUnionFee || -40000;
 

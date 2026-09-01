@@ -179,9 +179,22 @@ export const FORMULA_DEFS: Record<FormulaKey, FormulaDef> = {
   }
 };
 
-// Diligence formula metadata (không phải COUNTIF mà là logic JS)
+// Diligence & Productivity formula metadata — hệ thống hoá để Settings custom, không khóa cứng
 export const DILIGENCE_FORMULA = {
-  description: 'baseDiligence * (1 - penalty%) với penalty 50% nếu UL>=2, 100% nếu UL>=3',
-  excelFormulaExample: '=500000*(1-IF(COUNTIF(I:AM,"UL")+COUNTIF(I:AM,"Off")>=3,1,IF(COUNTIF(I:AM,"UL")+COUNTIF(I:AM,"Off")>=2,0.5,0)))',
-  appliesTo: 'diligenceBonus'
+  description: 'baseAmount * (1 - penalty%) với penalty 50% nếu UL>=2, 100% nếu UL>=3 — phạm vi COUNTIF custom (J:AM khớp file gốc)',
+  excelFormulaExample: '=500000*(1-IF(COUNTIF(J13:AM13,"UL")>=2,IF(COUNTIF(J13:AM13,"UL")>=3,1,0.5),0))',
+  appliesTo: 'diligenceBonus',
+  buildExcelFormula: (row: number, baseAmount: number, countRange: string) => {
+    const range = countRange || 'J:AM';
+    // range dạng "J:AM" -> thành "J13:AM13"
+    const [startCol, endCol] = range.split(':');
+    return `=${baseAmount}*(1-IF(COUNTIF(${startCol}${row}:${endCol}${row},"UL")>=2,IF(COUNTIF(${startCol}${row}:${endCol}${row},"UL")>=3,1,0.5),0))`;
+  }
+} as const;
+
+export const PRODUCTIVITY_FORMULA = {
+  description: 'Tiền năng suất AW = (TotalWD + TotalAL) * BaseRate / StandardWD  →  (AO+AP)*BF/AN',
+  excelFormulaExample: '=(AO13+AP13)*BF13/AN13',
+  buildExcelFormula: (row: number) => `=(AO${row}+AP${row})*BF${row}/AN${row}`,
+  appliesTo: 'productivityBonus'
 } as const;

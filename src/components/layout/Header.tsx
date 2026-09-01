@@ -375,8 +375,19 @@ export const Header: React.FC = () => {
         return;
       }
 
-      await exportTimesheetToExcel(emps, timesheets, overtimes, 8, 2026);
-      success('Xuất file Excel thành công!', 'File KIEM_TRA_CHOT_CONG đã được tải về máy của bạn.');
+      const now = new Date();
+      const curMonth = now.getMonth() + 1;
+      const curYear = now.getFullYear();
+      // Lấy settings hiện tại để truyền vào exporter (công thức custom)
+      let settings: any = undefined;
+      try {
+        const raw = localStorage.getItem('smarthr_settings');
+        if (raw) settings = JSON.parse(raw);
+        const dex = await db.settings.get('systemSettings');
+        if (dex?.value) settings = dex.value;
+      } catch {}
+      await exportTimesheetToExcel(emps, timesheets, overtimes, curMonth, curYear, 'ALL', settings);
+      success('Xuất file Excel thành công!', `Đã xuất ${emps.length} NV kỳ ${curMonth}/${curYear} (Chính thức 21-20 + Thời vụ 1-31, 2 sheet nếu có đủ nhóm).`);
     } catch (err: any) {
       error('Lỗi xuất Excel', err.message);
     }
