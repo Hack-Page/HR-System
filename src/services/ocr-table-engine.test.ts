@@ -5,6 +5,7 @@ import {
   parseOvertimeHours,
   mapGridToTableRows,
 } from './ocr-table-engine';
+import { extractCanonicalHRKey } from './hr-rag-postprocessor';
 import { IEmployee } from '../types';
 import { OcrTextLine } from '../types/ocr-worker-protocol';
 
@@ -31,6 +32,19 @@ const catalog: IEmployee[] = [
     startDate: '01/01/2022',
     contractType: 'SEASONAL',
     shiftClassId: 'SHIFT_2',
+    customAllowances: { pcccAllowance: 0, hazardousAllowance: 0, diligenceBonus: 500000, productivityBonus: 0, tradeUnionFee: -40000, otherFees: 0 },
+    annualLeaveBalance: { initialQuota: 12, usedDays: 0, remainingDays: 12 },
+    status: 'ACTIVE'
+  },
+  {
+    employeeId: 'LEP066A',
+    erpId: '1013799',
+    fullName: 'Lê Văn An',
+    department: 'Production',
+    position: 'Operator',
+    startDate: '01/01/2022',
+    contractType: 'OFFICIAL',
+    shiftClassId: 'SHIFT_1',
     customAllowances: { pcccAllowance: 0, hazardousAllowance: 0, diligenceBonus: 500000, productivityBonus: 0, tradeUnionFee: -40000, otherFees: 0 },
     annualLeaveBalance: { initialQuota: 12, usedDays: 0, remainingDays: 12 },
     status: 'ACTIVE'
@@ -63,6 +77,23 @@ describe('normalizeEmployeeCode', () => {
     const res = normalizeEmployeeCode('MON26', catalog);
     expect(res.matched).toBe(false);
   });
+  it('khớp mã nhân viên có hậu tố text LEP066A', () => {
+    const res = normalizeEmployeeCode('LEP066A', catalog);
+    expect(res.normalizedId).toBe('LEP066A');
+    expect(res.matched).toBe(true);
+    expect(res.name).toBe('Lê Văn An');
+  });
+  it('khớp mã thiếu số 0 có hậu tố: LEP66A -> LEP066A', () => {
+    const res = normalizeEmployeeCode('LEP66A', catalog);
+    expect(res.normalizedId).toBe('LEP066A');
+    expect(res.matched).toBe(true);
+    expect(res.name).toBe('Lê Văn An');
+  });
+  it('khớp mã nhầm chữ O có hậu tố: LEPO66A -> LEP066A', () => {
+    const res = normalizeEmployeeCode('LEPO66A', catalog);
+    expect(res.normalizedId).toBe('LEP066A');
+    expect(res.matched).toBe(true);
+  });
   it('digits only 26 -> LEP026 (chỉ khi khớp danh mục)', () => {
     const res = normalizeEmployeeCode('26', catalog);
     expect(res.normalizedId).toBe('LEP026');
@@ -72,6 +103,31 @@ describe('normalizeEmployeeCode', () => {
     const res = normalizeEmployeeCode('LEP999', catalog);
     expect(res.matched).toBe(false);
     expect(res.name).toBe('');
+  });
+});
+
+describe('extractCanonicalHRKey - RAG model thu gọn HR key LEP000 và LEP000text', () => {
+  it('thu gọn LEP000 chuẩn', () => {
+    expect(extractCanonicalHRKey('LEP001')).toBe('LEP001');
+    expect(extractCanonicalHRKey('LEP1')).toBe('LEP001');
+    expect(extractCanonicalHRKey('LEPOOO')).toBe('LEP000');
+    expect(extractCanonicalHRKey('LEPOO1')).toBe('LEP001');
+    expect(extractCanonicalHRKey('LEP040')).toBe('LEP040');
+    expect(extractCanonicalHRKey('LEP40')).toBe('LEP040');
+  });
+
+  it('thu gọn LEP000text có hậu tố chữ cái (ví dụ LEP066A, LEP100A, LEP000text)', () => {
+    expect(extractCanonicalHRKey('LEP066A')).toBe('LEP066A');
+    expect(extractCanonicalHRKey('LEP66A')).toBe('LEP066A');
+    expect(extractCanonicalHRKey('LEPO66A')).toBe('LEP066A');
+    expect(extractCanonicalHRKey('LP100A')).toBe('LEP100A');
+    expect(extractCanonicalHRKey('LEP000text')).toBe('LEP000text');
+    expect(extractCanonicalHRKey('LEP040WH')).toBe('LEP040WH');
+  });
+
+  it('trích xuất từ chuỗi dài kèm text', () => {
+    expect(extractCanonicalHRKey('1 LEP010 Trịnh Đình Tâm')).toBe('LEP010');
+    expect(extractCanonicalHRKey('Dòng 2: LEP066A chuyền may')).toBe('LEP066A');
   });
 });
 

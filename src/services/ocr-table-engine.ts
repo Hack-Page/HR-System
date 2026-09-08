@@ -6,6 +6,7 @@
  */
 import { IEmployee } from '../types';
 import type { OcrTableGrid } from '../types/ocr-worker-protocol';
+import { extractCanonicalHRKey } from './hr-rag-postprocessor';
 
 export interface IOCRBbox {
   x: number;
@@ -17,7 +18,7 @@ export interface IOCRBbox {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Chuẩn hoá mã nhân viên (LEP/LP, thiếu số 0, nhầm O với 0)
+// 1. Chuẩn hoá mã nhân viên (LEP/LP, thiếu số 0, nhầm O với 0, hỗ trợ LEP000 và LEP000text)
 // ---------------------------------------------------------------------------
 
 export function normalizeEmployeeCode(rawText: string, catalog: IEmployee[]): {
@@ -31,41 +32,56 @@ export function normalizeEmployeeCode(rawText: string, catalog: IEmployee[]): {
   const tryCatalog = (candidate: string) =>
     catalog.find(e => e.employeeId.toUpperCase() === candidate || e.erpId?.toUpperCase() === candidate);
 
-  // Đối chiếu trực tiếp trước
+  // 1. Đối chiếu trực tiếp trước
   const direct = tryCatalog(cleaned);
   if (direct) {
     return { normalizedId: direct.employeeId, name: direct.fullName, dept: direct.department, matched: true };
   }
 
-  // Nhóm tiền tố LEP/LP + phần số. Chỉ thay O->0 TRONG phần số phía sau tiền tố
-  // (tránh phá hỏng mã chứa chữ O thật ở vị trí khác)
-  const lepMatch = cleaned.match(/^(LEP|LP)([A-Z0-9]+)$/);
+  // 2. Thu gọn và trích xuất qua HR RAG Key (hỗ trợ cả LEP000 và LEP000text)
+  const canonical = extractCanonicalHRKey(rawText);
+  if (canonical) {
+    const foundCanonical = tryCatalog(canonical);
+    if (foundCanonical) {
+      return { normalizedId: foundCanonical.employeeId, name: foundCanonical.fullName, dept: foundCanonical.department, matched: true };
+    }
+  }
+
+  // 3. Nhóm tiền tố LEP/LP + phần số + phần text hậu tố (ví dụ: LEP066A, LEP100A, LEP040text)
+  // Chỉ thay O->0 TRONG phần số phía sau tiền tố, bảo toàn hậu tố
+  const lepMatch = cleaned.match(/^(LEP|LP)([0-9O]+)([A-Z0-9_-]*)$/);
   if (lepMatch) {
     const digits = lepMatch[2].replace(/O/g, '0').replace(/\D/g, '');
+    const suffix = lepMatch[3] || '';
     if (digits) {
       const num = parseInt(digits, 10);
-      const padded1 = `LEP${String(num).padStart(3, '0')}`;
-      const padded2 = `LP${String(num).padStart(3, '0')}`;
-      const found = catalog.find(e => e.employeeId === padded1 || e.employeeId === padded2 || e.erpId === padded1);
+      const padded1 = `LEP${String(num).padStart(3, '0')}${suffix}`;
+      const padded2 = `LP${String(num).padStart(3, '0')}${suffix}`;
+      const found = tryCatalog(padded1) || tryCatalog(padded2);
       if (found) {
         return { normalizedId: found.employeeId, name: found.fullName, dept: found.department, matched: true };
+      }
+      // Thử nếu danh mục nhân viên chỉ lưu mã gốc không có suffix
+      const paddedNoSuffix = `LEP${String(num).padStart(3, '0')}`;
+      const foundNoSuffix = tryCatalog(paddedNoSuffix);
+      if (foundNoSuffix) {
+        return { normalizedId: foundNoSuffix.employeeId, name: foundNoSuffix.fullName, dept: foundNoSuffix.department, matched: true };
       }
     }
   }
 
-  // Phương án cuối: chỉ có số -> thử ghép LEP{num}. Chỉ chấp nhận khi khớp danh mục,
-  // không bao giờ tự sáng tạo ra một mã mới
+  // Phương án cuối: chỉ có số -> thử ghép LEP{num}. Chỉ chấp nhận khi khớp danh mục
   const digitsOnly = cleaned.replace(/\D/g, '');
   if (digitsOnly && cleaned.length <= 4) {
     const num = parseInt(digitsOnly, 10);
     const candidate = `LEP${String(num).padStart(3, '0')}`;
-    const found = catalog.find(e => e.employeeId === candidate || e.erpId === candidate);
+    const found = tryCatalog(candidate);
     if (found) {
       return { normalizedId: found.employeeId, name: found.fullName, dept: found.department, matched: true };
     }
   }
 
-  return { normalizedId: cleaned || rawText.trim(), name: '', dept: '', matched: false };
+  return { normalizedId: canonical || cleaned || rawText.trim(), name: '', dept: '', matched: false };
 }
 
 // ---------------------------------------------------------------------------

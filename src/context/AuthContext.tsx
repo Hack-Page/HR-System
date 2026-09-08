@@ -23,31 +23,61 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const SESSION_KEY = 'smarthr_session';
 
-/** Tài khoản mặc định khởi tạo lần đầu: admin / admin123 */
-export const DEFAULT_ADMIN_USERNAME = 'admin';
-const DEFAULT_ADMIN_PASSWORD = 'admin123';
+/** Tài khoản mặc định khởi tạo lần đầu */
+export const DEFAULT_ADMIN_USERNAME = 'vinh';
+const DEFAULT_ADMIN_PASSWORD = '123';
 
-async function ensureDefaultAdmin(): Promise<void> {
-  const existing = await db.accounts.get(DEFAULT_ADMIN_USERNAME);
-  if (existing) {
-    // v6 backfill Flag nếu tài khoản cũ thiếu
-    if (typeof (existing as any).activeFlag === 'undefined') {
-      await db.accounts.update(DEFAULT_ADMIN_USERNAME, { activeFlag: existing.active ? 1 : 0 } as any);
+export async function ensureDefaultAccounts(): Promise<void> {
+  const seedUser = async (username: string, displayName: string, role: RoleType, pass: string) => {
+    const existing = await db.accounts.get(username);
+    if (!existing) {
+      const salt = generateSalt();
+      const account: IAccount = {
+        username,
+        displayName,
+        role,
+        salt,
+        passwordHash: await hashPassword(pass, salt),
+        active: true,
+        activeFlag: 1,
+        createdAt: new Date().toISOString(),
+      };
+      await db.accounts.put(account);
+    } else {
+      // Cập nhật đảm bảo mật khẩu & role chính xác theo cấu hình
+      const salt = generateSalt();
+      await db.accounts.update(username, {
+        displayName,
+        role,
+        salt,
+        passwordHash: await hashPassword(pass, salt),
+        active: true,
+        activeFlag: 1,
+      } as any);
     }
-    return;
-  }
-  const salt = generateSalt();
-  const account: IAccount = {
-    username: DEFAULT_ADMIN_USERNAME,
-    displayName: 'Quản trị hệ thống',
-    role: 'AD System',
-    salt,
-    passwordHash: await hashPassword(DEFAULT_ADMIN_PASSWORD, salt),
-    active: true,
-    activeFlag: 1,
-    createdAt: new Date().toISOString(),
   };
-  await db.accounts.put(account);
+
+  // 1. User: Vinh ; mật khẩu: 123 ; role: Admin system (toàn quyền)
+  await seedUser('vinh', 'Vinh', 'AD System', '123');
+
+  // 2. User: Kiều ; mật khẩu: 123 ; role: HR manager (toàn quyền trừ cài đặt)
+  await seedUser('kieu', 'Kiều', 'HR Manager', '123');
+
+  // 3. Tài khoản admin legacy
+  const existingAdmin = await db.accounts.get('admin');
+  if (!existingAdmin) {
+    const salt = generateSalt();
+    await db.accounts.put({
+      username: 'admin',
+      displayName: 'Quản trị hệ thống',
+      role: 'AD System',
+      salt,
+      passwordHash: await hashPassword('admin123', salt),
+      active: true,
+      activeFlag: 1,
+      createdAt: new Date().toISOString(),
+    });
+  }
 }
 
 function getDepartmentScope(role: RoleType): string | null {
@@ -65,13 +95,27 @@ function getDepartmentScope(role: RoleType): string | null {
 
 /**
  * Kiểm tra quyền NGHIÊM NGẶT theo ma trận RBAC:
- *  - Chỉ ALL_ACCESS hoặc khớp quyền khai báo
- *  - Mảng rỗng = KHÔNG có quyền gì (không còn fallback "rỗng = full")
- *  - Không còn hard-code "AD System luôn true" (ALL_ACCESS nằm trong ma trận)
+ *  - AD System: Toàn quyền hệ thống
+ *  - HR Manager: Toàn quyền NGOẠI TRỪ mục Cài đặt (SYSTEM_SETTINGS, MANAGE_ROLES_PERMISSIONS, SETTINGS)
+ *  - Các vai trò khác: Theo quyền khai báo trong ma trận
  */
 function makeHasPermission(role: RoleType | null, permissions: ISystemSettings['rolePermissions']) {
   return (action: string): boolean => {
     if (!role) return false;
+
+    // Yêu cầu: HR Manager không được thao tác mục Cài đặt trong hệ thống, còn lại toàn quyền
+    if (role === 'HR Manager') {
+      if (action === 'SYSTEM_SETTINGS' || action === 'MANAGE_ROLES_PERMISSIONS' || action === 'SETTINGS') {
+        return false;
+      }
+      return true; // Toàn quyền các mục còn lại
+    }
+
+    // Yêu cầu: AD System toàn quyền hệ thống
+    if (role === 'AD System') {
+      return true;
+    }
+
     const perms = permissions[role] || [];
     return perms.includes('ALL_ACCESS') || perms.includes(action);
   };
@@ -106,9 +150,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [dbSettingsEntry]);
 
-  // Khởi tạo tài khoản admin mặc định đúng một lần
+  // Khởi tạo các tài khoản mặc định (Vinh, Kiều, admin) đúng một lần
   useEffect(() => {
-    ensureDefaultAdmin().catch(console.error);
+    ensureDefaultAccounts().catch(console.error);
   }, []);
 
   const persistSession = (s: SessionUser | null) => {
@@ -125,10 +169,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 
   const login = useCallback(async (username: string, password: string): Promise<{ ok: boolean; error?: string }> => {
-    const uname = username.trim().toLowerCase();
+    let uname = username.trim().toLowerCase();
     if (!uname || !password) return { ok: false, error: 'Vui lòng nhập tên đăng nhập và mật khẩu' };
 
-    const account = await db.accounts.get(uname);
+    // Hỗ trợ gõ cả Kiều có dấu hoặc kieu không dấu
+    if (uname === 'kiều') uname = 'kieu';
+
+    let account = await db.accounts.get(uname);
+    if (!account) {
+      account = await db.accounts.filter(a => a.username.toLowerCase() === uname || a.displayName.toLowerCase() === uname).first();
+    }
+
     if (!account || !account.active) {
       return { ok: false, error: 'Tài khoản không tồn tại hoặc đã bị khóa' };
     }
@@ -136,7 +187,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const valid = await verifyPassword(password, account.salt, account.passwordHash);
     if (!valid) return { ok: false, error: 'Mật khẩu không đúng' };
 
-    await db.accounts.update(uname, { lastLoginAt: new Date().toISOString() });
+    await db.accounts.update(account.username, { lastLoginAt: new Date().toISOString() });
     const s: SessionUser = { username: account.username, displayName: account.displayName, role: account.role };
     persistSession(s);
     return { ok: true };

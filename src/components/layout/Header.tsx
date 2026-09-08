@@ -23,6 +23,7 @@ import { exportDatabaseToSnapshot, importDatabaseFromSnapshot } from '../../serv
 import { db } from '../../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { daysUntil as calcDaysUntil } from '../../services/pay-period';
+import { PresenceBar } from './PresenceBar';
 
 export const Header: React.FC = () => {
   const { session, currentRole, hasPermission, logout, refreshPermissions } = useAuth();
@@ -575,6 +576,9 @@ export const Header: React.FC = () => {
           <Cloud className="w-4 h-4 text-blue-600" />
           <span className="hidden xl:inline">Đồng Bộ OneDrive</span>
         </button>
+
+        {/* Realtime Active Avatars */}
+        <PresenceBar />
 
         {/* Language Toggle Button */}
         <button

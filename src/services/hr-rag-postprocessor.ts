@@ -14,9 +14,9 @@
 // ---------------------------------------------------------------------------
 
 export const HR_RAG_CONTEXT = {
-  // Patterns regex để classify field
+  // Patterns regex để classify field — hỗ trợ cả chuẩn LEP000 và LEP000text (ví dụ LEP066A, LEP100A, LEP000text)
   patterns: {
-    employeeId: /^LEP\d{3}$/,
+    employeeId: /^LEP\d{3}[A-Za-z0-9_-]*$/i,
     internalId: /^\d{7}$/,
     date: /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}$/,
     time: /^\d{1,2}:\d{2}$/,
@@ -77,6 +77,40 @@ export const HR_RAG_CONTEXT = {
 // ---------------------------------------------------------------------------
 
 /**
+ * Trích xuất và thu gọn chuỗi về đúng chuẩn HR Key: "LEP000" hoặc "LEP000text"
+ * Đảm bảo RAG model thu gọn về mã chuẩn nghiệp vụ Leggett & Platt:
+ * - "LEP1" -> "LEP001"
+ * - "LEP040" -> "LEP040"
+ * - "LEPOO1" -> "LEP001" (nhầm O với 0)
+ * - "LEP066A" -> "LEP066A" (giữ nguyên hậu tố chữ cái A)
+ * - "LEP66A" -> "LEP066A" (pad 3 số + giữ hậu tố A)
+ * - "LP100A" -> "LEP100A"
+ * - "LEP000text" -> "LEP000text"
+ * - "1 LEP014 Nguyễn Văn A" -> "LEP014"
+ */
+export function extractCanonicalHRKey(raw: string): string | null {
+  if (!raw) return null;
+  const cleaned = raw.trim();
+  // Khớp dạng LEP hoặc LP kèm số và text hậu tố (hỗ trợ cả LEP000 và LEP000text)
+  const match = cleaned.match(/(?:LEP|LP)\s*([0-9OoilIszZ]{1,6})([A-Za-z0-9_-]*)/i);
+  if (match) {
+    const numCleaned = match[1]
+      .replace(/[Oo]/g, '0')
+      .replace(/[lIi]/g, '1')
+      .replace(/[sS]/g, '5')
+      .replace(/[zZ]/g, '2');
+    const digits = numCleaned.replace(/\D/g, '');
+    if (digits) {
+      const num = parseInt(digits, 10);
+      const padded = String(num).padStart(3, '0');
+      const suffix = (match[2] || '').trim();
+      return `LEP${padded}${suffix}`;
+    }
+  }
+  return null;
+}
+
+/**
  * Apply all HR RAG corrections to raw OCR text
  */
 export function applyHRCorrections(text: string): string {
@@ -97,10 +131,16 @@ export function applyHRCorrections(text: string): string {
     }
   }
 
-  // 3. Normalize date format: dd-mm-yyyy → dd/mm/yyyy
+  // 3. Chuẩn hoá mã nhân viên về HR Key: LEP000 hoặc LEP000text
+  const hrKey = extractCanonicalHRKey(corrected);
+  if (hrKey && /^(?:LEP|LP)\s*[0-9OoilIszZ]{1,6}[A-Za-z0-9_-]*$/i.test(corrected)) {
+    corrected = hrKey;
+  }
+
+  // 4. Normalize date format: dd-mm-yyyy → dd/mm/yyyy
   corrected = corrected.replace(/(\d{1,2})-(\d{1,2})-(\d{2,4})/g, '$1/$2/$3');
 
-  // 4. Fix common OCR artifacts
+  // 5. Fix common OCR artifacts
   corrected = corrected.replace(/\s+/g, ' ').trim();
 
   return corrected;
@@ -112,6 +152,11 @@ export function applyHRCorrections(text: string): string {
 export function classifyHRField(text: string): string {
   const cleaned = text.trim();
   
+  // Ưu tiên phát hiện chuẩn HR Key: LEP000 hoặc LEP000text
+  if (extractCanonicalHRKey(cleaned) && /^(?:LEP|LP)\s*[0-9OoilIszZ]{1,6}[A-Za-z0-9_-]*$/i.test(cleaned)) {
+    return 'employeeId';
+  }
+
   for (const [fieldType, pattern] of Object.entries(HR_RAG_CONTEXT.patterns)) {
     if ((pattern as RegExp).test(cleaned)) {
       return fieldType;
@@ -171,7 +216,9 @@ export function extractAttendanceRecord(
   
   for (const cell of processedCells) {
     switch (cell.fieldType) {
-      case 'employeeId': record.employeeId = cell.correctedText; break;
+      case 'employeeId':
+        record.employeeId = extractCanonicalHRKey(cell.correctedText) || cell.correctedText;
+        break;
       case 'date': record.date = cell.correctedText; break;
       case 'time':
         if (!record.checkIn) record.checkIn = cell.correctedText;

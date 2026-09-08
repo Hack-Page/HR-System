@@ -26,20 +26,27 @@ import * as ort from 'onnxruntime-web/wasm';
 // Cấu hình
 // ---------------------------------------------------------------------------
 
-const MODEL_PATHS = {
-  det: '/PaddleOCR-Models/onnx/ch_PP-OCRv4_det_infer.onnx',
-  recLatin: '/PaddleOCR-Models/onnx/latin_PP-OCRv3_rec.onnx',
-};
-// Lưu ý: model classifier ch_ppocr_mobile_v2.0_cls.onnx trong repo có node Concat
-// lỗi opset khiến ORT >= 1.20 từ chối nạp. Thay vào đó dùng chiến lược "quét 2 chiều":
-// nhận dạng 180° khi kết quả thường có độ tin cậy thấp, chọn hướng tốt hơn (đo thật).
-// FIX: Giữ nguyên cấu trúc PaddleOCR-Models nhưng đảm bảo model hoạt động lại
-// - latin_dict.txt là từ điển CHÍNH cho CTC decode (khớp output 187 của latin_PP-OCRv3_rec.onnx)
-// - vi_dict.txt (giờ là 235 ký tự comprehensive: latin 185 + 50 ký tự HR tiếng Việt) dùng cho HR RAG post-process
-//   Worker sẽ LUÔN dùng latin cho CTC để tránh mismatch 113 vs 187 gây decode sai hoàn toàn.
-//   Sau CTC, HR RAG sẽ áp dụng corrections (LEP codes, dates) để hỗ trợ tiếng Việt HR.
-const DICT_URL_VI = '/PaddleOCR-Models/dictionaries/vi_dict.txt';
-const DICT_URL_LATIN = '/PaddleOCR-Models/dictionaries/latin_dict.txt';
+// Tự động tìm và tạo danh sách đường dẫn dự phòng (relative, absolute, origin, base)
+function getCandidateUrls(relPath: string): string[] {
+  const list: string[] = [];
+  const clean = relPath.replace(/^\.?\//, '');
+  try {
+    if (typeof self !== 'undefined' && self.location && self.location.href) {
+      const loc = self.location.href;
+      const baseDir = loc.substring(0, loc.lastIndexOf('/') + 1);
+      list.push(new URL(clean, baseDir).href);
+      list.push(new URL('../' + clean, baseDir).href);
+      list.push(new URL('../../' + clean, baseDir).href);
+      if (self.location.origin && self.location.origin !== 'null') {
+        list.push(`${self.location.origin}/${clean}`);
+      }
+    }
+  } catch {}
+  list.push(`/${clean}`);
+  list.push(`./${clean}`);
+  list.push(clean);
+  return Array.from(new Set(list));
+}
 
 const DET_LIMIT_SIDE = 960;      // giới hạn cạnh lớn trước khi đưa vào det
 const DET_BIN_THRESH = 0.3;      // ngưỡng binarize bản đồ xác suất DBNet
@@ -48,18 +55,28 @@ const DET_UNCLIP_RATIO = 1.6;    // hệ số nới rộng hộp (xấp xỉ Cli
 const REC_TARGET_H = 48;         // chiều cao chuẩn đầu vào recognition
 const MAX_BOXES = 400;           // trần số vùng chữ xử lý mỗi ảnh
 
-ort.env.wasm.wasmPaths = '/PaddleOCR-Models/ort/';
-// Tối ưu tăng tốc cho Edge: bật SIMD + threads theo đúng năng lực máy, phản ánh đúng tốc độ thực tế
+// Tự động cấu hình đường dẫn WASM thích ứng cả localhost và offline
+try {
+  if (typeof self !== 'undefined' && self.location && self.location.origin && self.location.origin !== 'null') {
+    ort.env.wasm.wasmPaths = `${self.location.origin}/PaddleOCR-Models/ort/`;
+  } else {
+    ort.env.wasm.wasmPaths = './PaddleOCR-Models/ort/';
+  }
+} catch {
+  ort.env.wasm.wasmPaths = '/PaddleOCR-Models/ort/';
+}
+
+// Tối ưu tăng tốc cho Edge: bật SIMD + threads theo đúng năng lực máy
 try {
   const hw = (self as any).navigator?.hardwareConcurrency || 4;
   (ort.env.wasm as any).numThreads = Math.min(hw, 4);
   (ort.env.wasm as any).simd = true;
-  // proxy = false giảm overhead khi không cần SharedArrayBuffer cross-origin
   (ort.env.wasm as any).proxy = false;
 } catch {}
 
-// Cache vĩnh viễn cho model/WASM: lưu ArrayBuffer vào CacheStorage 'ocr-model-cache-v1' để máy đã tải 1 lần sau đó dùng lại không tải lại (tránh lag)
+// Cache vĩnh viễn cho model/WASM
 const OCR_CACHE_NAME = 'ocr-model-cache-v1';
+
 async function fetchWithCache(url: string): Promise<ArrayBuffer> {
   try {
     if ('caches' in self) {
@@ -72,13 +89,58 @@ async function fetchWithCache(url: string): Promise<ArrayBuffer> {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
       const clone = res.clone();
-      // put async không chặn
       cache.put(url, clone).catch(() => {});
       return await res.arrayBuffer();
     }
   } catch {}
-  // fallback: fetch thường
   return fetchArrayBuffer(url);
+}
+
+async function fetchFirstAvailableBuffer(relPath: string): Promise<ArrayBuffer> {
+  const candidates = getCandidateUrls(relPath);
+  let lastError: any = null;
+  for (const url of candidates) {
+    try {
+      const buf = await fetchWithCache(url);
+      if (buf && buf.byteLength > 0) return buf;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw new Error(`Không thể nạp tệp model [${relPath}] từ các vị trí dự phòng. Hãy đảm bảo thư mục PaddleOCR-Models được đặt cùng cấp hoặc trong dist/. Lỗi: ${lastError?.message || lastError}`);
+}
+
+async function fetchFirstAvailableText(relPath: string): Promise<string> {
+  const candidates = getCandidateUrls(relPath);
+  let lastError: any = null;
+  for (const url of candidates) {
+    try {
+      if ('caches' in self) {
+        try {
+          const cache = await (caches as any).open(OCR_CACHE_NAME);
+          const cached = await cache.match(url);
+          if (cached) {
+            const txt = await cached.text();
+            if (txt && txt.length > 0) return txt;
+          }
+        } catch {}
+      }
+      const res = await fetch(url);
+      if (res.ok) {
+        const text = await res.text();
+        try {
+          if ('caches' in self) {
+            const cache = await (caches as any).open(OCR_CACHE_NAME);
+            cache.put(url, new Response(text)).catch(() => {});
+          }
+        } catch {}
+        return text;
+      }
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw new Error(`Không thể nạp tệp từ điển [${relPath}]. Lỗi: ${lastError?.message || lastError}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -122,11 +184,10 @@ async function loadCharset(): Promise<{ charset: string[]; dictSize: number; sou
   // 1) Bắt buộc: latin_dict là chuẩn cho model latin_PP-OCRv3_rec.onnx (output 187 = 185+2)
   let latinDict: string[] = [];
   try {
-    const res = await fetch(DICT_URL_LATIN);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    latinDict = parseDictText(await res.text());
+    const text = await fetchFirstAvailableText('PaddleOCR-Models/dictionaries/latin_dict.txt');
+    latinDict = parseDictText(text);
   } catch (e: any) {
-    throw new Error(`Không tải được từ điển chính ${DICT_URL_LATIN}: ${e?.message || e}`);
+    throw new Error(`Không tải được từ điển chính latin_dict.txt: ${e?.message || e}`);
   }
   if (latinDict.length !== 185 && latinDict.length !== 186) {
     console.warn(`[OCR Worker] latin_dict size bất thường: ${latinDict.length}, kỳ vọng 185 (model output 187). Vẫn thử decode.`);
@@ -135,23 +196,13 @@ async function loadCharset(): Promise<{ charset: string[]; dictSize: number; sou
   // 2) Tùy chọn: vi_dict comprehensive (235) - chỉ để HR RAG, KHÔNG dùng cho CTC nếu mismatch
   let viInfo = 'không tải được vi_dict';
   try {
-    const res = await fetch(DICT_URL_VI);
-    if (res.ok) {
-      const viText = await res.text();
-      const viDict = parseDictText(viText);
-      viInfo = `vi_dict ${viDict.length} ký tự`;
-      // Nếu vi_dict vô tình khớp 185/186 (ví dụ bản fix copy latin) thì log khác, nhưng vẫn ưu tiên latin cho ổn định
-      if (viDict.length === 185 || viDict.length === 186) {
-        viInfo += ' (khớp kích thước CTC)';
-      } else {
-        viInfo += ' → comprehensive HR Vietnamese (dùng cho HR RAG post-process, CTC vẫn dùng latin để khớp model 187)';
-      }
-      // Trường hợp vi_dict cũ 113 sẽ rơi vào nhánh này và được cảnh báo rõ
-      if (viDict.length === 113) {
-        viInfo += ' [CẢNH BÁO: bản cũ 113 thiếu digits/symbols, đã fix thành 235]';
-      }
+    const viText = await fetchFirstAvailableText('PaddleOCR-Models/dictionaries/vi_dict.txt');
+    const viDict = parseDictText(viText);
+    viInfo = `vi_dict ${viDict.length} ký tự`;
+    if (viDict.length === 185 || viDict.length === 186) {
+      viInfo += ' (khớp kích thước CTC)';
     } else {
-      viInfo = `vi_dict HTTP ${res.status}`;
+      viInfo += ' → comprehensive HR Vietnamese (dùng cho HR RAG post-process, CTC vẫn dùng latin để khớp model 187)';
     }
   } catch (e: any) {
     viInfo = `vi_dict lỗi: ${e?.message || e}`;
@@ -171,12 +222,12 @@ async function ensureBundle(requestId: string): Promise<SessionBundle> {
   const charsetInfo = await loadCharset();
   progress(requestId, 10, 'DICT', `Chuẩn bị dữ liệu nhận diện | ${charsetInfo.viInfo}`);
 
-  progress(requestId, 12, 'LOAD_DET', `Đang tải thuật toán phát hiện vùng chữ (lần đầu cache vĩnh viễn, lần sau dùng cache)...`);
-  const detBuf = await fetchWithCache(MODEL_PATHS.det);
+  progress(requestId, 12, 'LOAD_DET', `Đang tự động nhận diện và tải mô hình phát hiện vùng chữ...`);
+  const detBuf = await fetchFirstAvailableBuffer('PaddleOCR-Models/onnx/ch_PP-OCRv4_det_infer.onnx');
   const det = await ort.InferenceSession.create(detBuf, { executionProviders: ['wasm'] });
 
-  progress(requestId, 20, 'LOAD_REC', `Đang tải thuật toán nhận dạng ký tự (lần đầu cache vĩnh viễn, lần sau dùng cache)...`);
-  const recBuf = await fetchWithCache(MODEL_PATHS.recLatin);
+  progress(requestId, 20, 'LOAD_REC', `Đang tự động nhận diện và tải mô hình nhận dạng ký tự...`);
+  const recBuf = await fetchFirstAvailableBuffer('PaddleOCR-Models/onnx/latin_PP-OCRv3_rec.onnx');
   const rec = await ort.InferenceSession.create(recBuf, { executionProviders: ['wasm'] });
 
   bundle = { det, rec, charset: charsetInfo.charset, dictSize: charsetInfo.dictSize, charsetNote: '', dictSource: charsetInfo.source, viDictInfo: charsetInfo.viInfo };

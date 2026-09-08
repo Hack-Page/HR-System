@@ -154,6 +154,21 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  if (!canManageSystem && currentRole !== 'AD System') {
+    return (
+      <div className="p-8 max-w-xl mx-auto text-center mt-12 bg-white rounded-3xl border border-rose-100 shadow-sm">
+        <div className="w-14 h-14 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-rose-200">
+          <Lock className="w-6 h-6" />
+        </div>
+        <h2 className="text-base font-bold text-slate-900">Truy cập bị hạn chế</h2>
+        <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+          Tài khoản vai trò <b>HR Manager (Kiều)</b> không được phép thao tác mục Cài đặt trong hệ thống.
+          Vui lòng đăng nhập với tài khoản <b>Vinh (Admin System)</b> để truy cập tính năng này.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 w-full space-y-6 flex-1 flex flex-col">
       {/* Top Banner */}

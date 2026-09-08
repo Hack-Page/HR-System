@@ -107,9 +107,41 @@ export const LoginScreen: React.FC = () => {
               )}
             </button>
 
-            <div className="pt-2 text-center text-[11px] text-slate-400 leading-relaxed">
-              Tài khoản lần đầu: <code className="font-mono font-bold text-slate-600">{DEFAULT_ADMIN_USERNAME} / admin123</code>
-              <br />Vui lòng đổi mật khẩu ngay sau khi đăng nhập (mục Cài đặt).
+            {/* Quick Login buttons */}
+            <div className="pt-2 border-t border-slate-100">
+              <p className="text-[11px] font-bold text-slate-500 mb-2 text-center">
+                Chọn tài khoản kiểm tra phân quyền:
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsername('vinh');
+                    setPassword('123');
+                  }}
+                  className="px-2.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-left transition cursor-pointer"
+                >
+                  <div className="font-bold text-xs">👤 Vinh</div>
+                  <div className="text-[10px] text-purple-600">Admin system (123)</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsername('kieu');
+                    setPassword('123');
+                  }}
+                  className="px-2.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl text-left transition cursor-pointer"
+                >
+                  <div className="font-bold text-xs">👤 Kiều</div>
+                  <div className="text-[10px] text-blue-600">HR manager (123)</div>
+                </button>
+              </div>
+            </div>
+
+            <div className="text-center text-[10px] text-slate-400 leading-relaxed">
+              • <b>Vinh (123)</b>: Toàn quyền hệ thống &amp; Cài đặt RBAC
+              <br />• <b>Kiều (123)</b>: Toàn quyền nhân sự (không vào Cài đặt)
             </div>
           </form>
         </div>

@@ -37,7 +37,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activePage, onSelectPage }) => {
   const { t } = useLanguage();
-  const { session, currentRole } = useAuth();
+  const { session, currentRole, hasPermission } = useAuth();
 
   // v6: dùng Flag 0|1 thay boolean để index hợp lệ (IndexedDB chỉ cho Number/String/Date)
   const badgeCounts = useLiveQuery(async () => {
@@ -186,16 +186,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onSelectPage }) =>
           </div>
         </button>
 
-        {/* Settings & RBAC - flat, không còn SYSTEM & ROLES header */}
-        <button
-          onClick={() => onSelectPage('settings')}
-          className={menuItemClass(activePage === 'settings')}
-        >
-          <div className="flex items-center gap-2.5">
-            <Settings className={`w-4 h-4 ${activePage === 'settings' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
-            <span>{t('settings')} & RBAC</span>
-          </div>
-        </button>
+        {/* Settings & RBAC - Chỉ hiển thị cho Admin System có quyền SYSTEM_SETTINGS, HR Manager bị ẩn */}
+        {hasPermission('SYSTEM_SETTINGS') && (
+          <button
+            onClick={() => onSelectPage('settings')}
+            className={menuItemClass(activePage === 'settings')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Settings className={`w-4 h-4 ${activePage === 'settings' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+              <span>{t('settings')} & RBAC</span>
+            </div>
+          </button>
+        )}
 
         {/* Tạo khảo sát - external link */}
         <a
