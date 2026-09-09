@@ -69,6 +69,12 @@ export interface IEmployee {
   status: EmployeeStatus;
   resignedDate?: string;
   notes?: string;
+  maternityStartDate?: string; // YYYY-MM-DD
+  maternityEndDate?: string;   // YYYY-MM-DD
+  businessTripStartDate?: string; // YYYY-MM-DD - Chế độ công tác
+  businessTripEndDate?: string;   // YYYY-MM-DD
+  businessTripLocation?: string;  // Địa điểm / Lý do công tác
+  businessTripNote?: string;
   // Mở rộng: hợp đồng & thử việc
   contractTerm?: '1_MONTH' | '2_MONTHS' | '1_YEAR' | '3_YEARS' | 'PERMANENT'; // thời hạn hợp đồng
   contractStartDate?: string; // DD/MM/YYYY
@@ -97,25 +103,27 @@ export interface IRawAttendanceLog {
 
 export type AttendanceStatusCode = 
   | 'W'         // Đi làm đầy đủ
-  | 'N'         // Đi ca đêm
-  | 'Off'       // Vắng không quẹt thẻ (Chờ bù phép)
+  | 'N'         // Đi ca đêm (Ca 2 14:00 - 22:00)
+  | 'OFF'       // Vắng không quẹt thẻ ngày làm việc (Chờ bù phép)
+  | 'Off'       // Vắng không quẹt thẻ (tương thích)
   | 'WO'        // Nghỉ hàng tuần (Weekly Off)
   | 'AL'        // Nghỉ phép năm
   | 'UL'        // Nghỉ không lương
   | 'SL'        // Nghỉ ốm / bệnh
-  | 'PL'        // Nghỉ phép tang hoặc kết hôn (chế độ có lương) - PL: Bereavement/Marriage leave
-  | 'PH'        // Nghỉ lễ - tự động điền khi cả công ty không đi (ngày thường không chấm công trừ CN)
+  | 'PL'        // Nghỉ phép tang hoặc kết hôn (chế độ có lương)
+  | 'PH'        // Nghỉ lễ
   | 'BT'        // Công tác
-  | 'LA'        // Đi làm trễ <30 phút - Late Arrival (phụ thuộc ca sắp xếp; >=30 phút → chờ duyệt phép)
-  | 'ED'        // Về sớm <30 phút - Early Departure (tương tự LA)
-  | 'MCO'       // Không chấm công ra - Missing clock-out (có vào, thiếu ra)
-  | 'MCI'       // Không chấm công vào - Missing clock-in (có ra, thiếu vào)
+  | 'LA'        // Đi làm trễ (2p đến <60p)
+  | 'ED'        // Về sớm (2p đến <60p)
+  | 'MCO'       // Chỉ có giờ ra, không có giờ vào
+  | 'MCI'       // Chỉ có giờ vào, không có giờ ra
   | 'W/2 AL/2'  // Nửa ngày làm, nửa ngày phép
   | 'W/2 UL/2'  // Nửa ngày làm, nửa ngày không lương
   | 'AL/2 UL/2' // Nửa ngày phép, nửa ngày không lương
-  | 'MATERNITY LEAVE' // Nghỉ thai sản
+  | 'ML'        // Nghỉ thai sản (Maternity Leave)
+  | 'MATERNITY LEAVE' // Nghỉ thai sản (tương thích)
   | 'RESIGNED'  // Đã nghỉ việc
-  | '';         // Trống (ngày nghỉ)
+  | (string & {}); // Hỗ trợ định dạng phân giờ W6/AL2, W4/UL4, W7/PL1, v.v.
 
 export interface IDailyTimesheetCell {
   employeeId_date: string;    // LEP010_2026-07-21
@@ -152,6 +160,11 @@ export interface IOvertimeRecord {
   verifiedAt?: string;
   month: number;
   year: number;
+  startTime?: string;         // Giờ bắt đầu tăng ca
+  endTime?: string;           // Giờ kết thúc tăng ca
+  rawMinutes?: number;        // Tổng số phút tăng ca thực tế
+  isEarlyIn?: boolean;        // Cờ gắn cho trường hợp vào sớm 6:00 - 6:30
+  note?: string;              // Ghi chú chi tiết tăng ca
 }
 
 export type LeaveType = 'AL' | 'UL' | 'SL' | 'PL' | 'BT' | 'MATERNITY' | 'UNAUTHORIZED';
@@ -163,7 +176,9 @@ export interface ILeaveRequest {
   department: string;
   date: string;               // YYYY-MM-DD
   leaveType: LeaveType;
-  durationDays: number;       // 1 hoặc 0.5
+  durationDays: number;       // 1 hoặc 0.5 hoặc tỷ lệ ngày tương ứng (missedHours / 8)
+  missedHours?: number;       // Số giờ vắng mặt (1..8)
+  workedHours?: number;       // Số giờ làm việc thực tế (0..7)
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   reason?: string;
   rejectionReason?: string;

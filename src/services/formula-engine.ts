@@ -76,7 +76,7 @@ export function computeEmployeeTimesheetSummary(
     } else if (code === 'MCI') {
       missingClockInCount++;
       missingPunchCnt++;
-    } else if (code === 'Off') {
+    } else if (code === 'Off' || code === 'OFF') {
       missingPunchCnt++;
     } else {
       // Fallback thiếu quẹt không có mã chuẩn nhưng có 1 bên quẹt
@@ -104,14 +104,13 @@ export function computeEmployeeTimesheetSummary(
     missingClockInCount = bag.countMCI;
     missingPunchCnt += diff;
   }
-  // Off từ bag cũng cần đảm bảo missingPunchCnt không thấp hơn Off count (trường hợp Off không qua loop trên? nhưng đã qua)
+  // Off từ bag cũng cần đảm bảo missingPunchCnt không thấp hơn Off count
   if (bag.countOff > 0) {
-    // đếm lại Off chính xác từ bag nếu loop chưa đủ (ví dụ cell Off bị bỏ vì code !== Off? nhưng đã đếm)
-    // Đảm bảo tổng missingPunch không nhỏ hơn countOff + MCO+MCI
-    const expectedMin = bag.countOff + bag.countMCO + bag.countMCI;
-    // Nhưng loop đã đếm Off cho từng cell, nên nếu thiếu thì bù
     let countedOff = 0;
-    for (const c of cells) if ((c.statusCode || '').trim() === 'Off') countedOff++;
+    for (const c of cells) {
+      const cd = (c.statusCode || '').trim();
+      if (cd === 'Off' || cd === 'OFF') countedOff++;
+    }
     if (countedOff < bag.countOff) missingPunchCnt += (bag.countOff - countedOff);
   }
 

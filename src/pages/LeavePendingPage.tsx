@@ -27,6 +27,7 @@ export const LeavePendingPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [selectedLeaveType, setSelectedLeaveType] = useState<Record<string, LeaveType>>({});
+  const [selectedHours, setSelectedHours] = useState<Record<string, number>>({});
 
   // Live queries
   const employees = useLiveQuery(() => db.employees.toArray(), []) || [];
@@ -60,11 +61,16 @@ export const LeavePendingPage: React.FC = () => {
       return;
     }
 
-    // ANNUAL LEAVE QUOTA ENFORCEMENT - kiểm tra trước để báo UI thân thiện,
-    // kiểm tra chặt (atomic) nằm trong transaction bên dưới
+    // Tính số giờ phép và giờ làm
+    const defaultHours = req.missedHours ?? (req.durationDays < 1 ? Math.round(req.durationDays * 8) : 8);
+    const leaveHours = selectedHours[req.id] ?? defaultHours;
+    const workHours = Math.max(0, 8 - leaveHours);
+    const effectiveDurationDays = leaveHours / 8; // e.g. 2h / 8 = 0.25 công
+
+    // ANNUAL LEAVE QUOTA ENFORCEMENT - kiểm tra trước để báo UI thân thiện
     if (chosenType === 'AL') {
       const remainingQuota = emp.annualLeaveBalance?.remainingDays ?? 0;
-      if (remainingQuota < req.durationDays) {
+      if (remainingQuota < effectiveDurationDays) {
         await alertModal(
           'Từ Chối Phê Duyệt Phép Năm (Hết Hạn Mức)',
           (
@@ -73,7 +79,7 @@ export const LeavePendingPage: React.FC = () => {
                 Nhân viên <span className="text-orange-600 font-bold">[{emp.employeeId}] {emp.fullName}</span> hiện chỉ còn <span className="text-rose-600 font-bold">{remainingQuota}</span> ngày phép năm trong hồ sơ.
               </p>
               <p className="text-slate-600 text-xs">
-                Yêu cầu bù phép {req.durationDays} ngày phép năm đã bị từ chối do vượt quá hạn mức. Vui lòng chọn loại nghỉ <b>Không Lương (UL)</b> hoặc điều chỉnh hạn mức phép trong Menu Danh Mục Nhân Viên.
+                Yêu cầu bù phép {effectiveDurationDays} ngày ({leaveHours} giờ phép năm) đã bị từ chối do vượt quá hạn mức còn lại. Vui lòng chọn loại nghỉ <b>Không Lương (UL)</b> hoặc điều chỉnh hạn mức phép trong Menu Danh Mục Nhân Viên.
               </p>
             </div>
           ),
@@ -83,39 +89,39 @@ export const LeavePendingPage: React.FC = () => {
       }
     }
 
-    // Map LeaveType to AttendanceStatusCode
+    // Xác định mã công: nếu < 8 tiếng thì chia theo dạng W{workHours}/{chosenType}{leaveHours} (VD: W6/AL2)
     let newStatusCode: AttendanceStatusCode = 'UL';
-    if (chosenType === 'AL') newStatusCode = req.durationDays === 0.5 ? 'W/2 AL/2' : 'AL';
-    else if (chosenType === 'SL') newStatusCode = 'SL';
-    else if (chosenType === 'PL') newStatusCode = 'PL';
-    else if (chosenType === 'BT') newStatusCode = 'BT';
-    else if (chosenType === 'MATERNITY') newStatusCode = 'MATERNITY LEAVE';
-    else if (chosenType === 'UL') newStatusCode = req.durationDays === 0.5 ? 'W/2 UL/2' : 'UL';
+    if (leaveHours >= 8) {
+      newStatusCode = chosenType;
+    } else {
+      newStatusCode = `W${workHours}/${chosenType}${leaveHours}`;
+    }
 
     // Update Timesheet cell - kỳ lấy từ ngày yêu cầu thay vì tháng cứng
     const cellKey = `${req.employeeId}_${req.date}`;
     const [y, m] = req.date.split('-').map(Number);
 
     try {
-      // Toàn bộ phê duyệt trong MỘT transaction: trừ phép năm + ghi công + đổi trạng thái
-      // là nguyên khối hoặc không có gì (chống double-spend hạn mức khi duyệt nhanh liên tiếp)
+      // Toàn bộ phê duyệt trong MỘT transaction
       await db.transaction('rw', db.employees, db.dailyTimesheets, db.leaveRequests, async () => {
         const freshEmp = await db.employees.get(req.employeeId);
         if (!freshEmp) throw new Error(`Nhân viên ${req.employeeId} vừa bị xoá khỏi hệ thống`);
 
         if (chosenType === 'AL') {
           const remainingQuota = freshEmp.annualLeaveBalance?.remainingDays ?? 0;
-          if (remainingQuota < req.durationDays) {
-            throw new Error(`Hạn mức phép năm chỉ còn ${remainingQuota} ngày - không đủ ${req.durationDays} ngày`);
+          if (remainingQuota < effectiveDurationDays) {
+            throw new Error(`Hạn mức phép năm chỉ còn ${remainingQuota} ngày - không đủ ${effectiveDurationDays} ngày`);
           }
           await db.employees.update(req.employeeId, {
             annualLeaveBalance: {
               ...freshEmp.annualLeaveBalance,
-              usedDays: (freshEmp.annualLeaveBalance?.usedDays ?? 0) + req.durationDays,
-              remainingDays: remainingQuota - req.durationDays
+              usedDays: (freshEmp.annualLeaveBalance?.usedDays ?? 0) + effectiveDurationDays,
+              remainingDays: Math.max(0, remainingQuota - effectiveDurationDays)
             }
           });
         }
+
+        const existingCell = await db.dailyTimesheets.get(cellKey);
 
         await db.dailyTimesheets.put({
           employeeId_date: cellKey,
@@ -123,7 +129,14 @@ export const LeavePendingPage: React.FC = () => {
           date: req.date,
           dayIndex: parseInt(req.date.split('-')[2], 10),
           statusCode: newStatusCode,
-          calculatedOvertime: 0,
+          calculatedOvertime: existingCell?.calculatedOvertime || 0,
+          checkIn: existingCell?.checkIn,
+          checkOut: existingCell?.checkOut,
+          isViolation: false,
+          isViolationFlag: 0,
+          violationNote: leaveHours < 8
+            ? `Bù phép ${leaveHours} giờ (${chosenType}) + làm việc ${workHours} giờ (W)`
+            : `Đã duyệt bù phép cả ngày (${chosenType})`,
           month: m,
           year: y
         });
@@ -131,6 +144,9 @@ export const LeavePendingPage: React.FC = () => {
         await db.leaveRequests.update(req.id, {
           status: 'APPROVED',
           leaveType: chosenType,
+          durationDays: effectiveDurationDays,
+          missedHours: leaveHours,
+          workedHours: workHours,
           processedBy: session?.displayName ?? currentRole ?? 'unknown',
           processedAt: new Date().toISOString()
         });
@@ -142,7 +158,7 @@ export const LeavePendingPage: React.FC = () => {
 
     success(
       'Phê duyệt bù phép thành công!',
-      `Đã chuyển trạng thái ngày ${req.date} của ${emp.fullName} sang mã "${newStatusCode}".`
+      `Đã chuyển trạng thái ngày ${req.date} của ${emp.fullName} sang mã "${newStatusCode}" (Làm ${workHours}h / Nghỉ ${leaveHours}h).`
     );
   };
 
@@ -247,8 +263,13 @@ export const LeavePendingPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 font-medium text-slate-700">{req.department}</td>
                     <td className="py-3 px-4 text-center font-bold text-rose-600">
-                      <span className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200">
-                        {req.date} (1 ngày)
+                      <span className="px-2.5 py-1 rounded-lg bg-rose-50 border border-rose-200 block">
+                        {req.date}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-normal mt-0.5 block">
+                        {req.missedHours && req.missedHours < 8
+                          ? `Vắng ${req.missedHours}h / 8h (${req.missedHours / 8} ngày)`
+                          : `${req.durationDays || 1} ngày`}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-center">
@@ -262,20 +283,59 @@ export const LeavePendingPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-center">
                       {req.status === 'PENDING' ? (
-                        <select
-                          value={chosenType}
-                          onChange={(e) => setSelectedLeaveType({ ...selectedLeaveType, [req.id]: e.target.value as LeaveType })}
-                          className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-orange-500"
-                        >
-                          <option value="AL">Phép năm (AL) - Trừ số dư</option>
-                          <option value="UL">Nghỉ không lương (UL)</option>
-                          <option value="SL">Nghỉ ốm / bệnh (SL)</option>
-                          <option value="PL">Nghỉ chế độ: tang/cưới (PL)</option>
-                          <option value="BT">Công tác ngoài (BT)</option>
-                          <option value="MATERNITY">Nghỉ thai sản</option>
-                        </select>
+                        <div className="flex flex-col items-center gap-1.5 min-w-[210px]">
+                          <select
+                            value={chosenType}
+                            onChange={(e) => setSelectedLeaveType({ ...selectedLeaveType, [req.id]: e.target.value as LeaveType })}
+                            className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-orange-500"
+                          >
+                            <option value="AL">Phép năm (AL) - Trừ số dư</option>
+                            <option value="UL">Nghỉ không lương (UL)</option>
+                            <option value="SL">Nghỉ ốm / bệnh (SL)</option>
+                            <option value="PL">Nghỉ chế độ: tang/cưới (PL)</option>
+                          </select>
+
+                          {/* Custom giờ bù phép khi vắng dưới 1 ngày */}
+                          {(() => {
+                            const curLeaveH = selectedHours[req.id] ?? (req.missedHours ?? (req.durationDays < 1 ? Math.round(req.durationDays * 8) : 8));
+                            const curWorkH = Math.max(0, 8 - curLeaveH);
+                            return (
+                              <div className="w-full flex flex-col gap-1 bg-slate-50 p-1.5 rounded-lg border border-slate-200 text-left">
+                                <div className="flex items-center justify-between text-[11px]">
+                                  <span className="text-slate-500 font-medium">Giờ bù phép:</span>
+                                  <select
+                                    value={curLeaveH}
+                                    onChange={(e) => setSelectedHours({ ...selectedHours, [req.id]: parseInt(e.target.value, 10) })}
+                                    className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-xs font-bold text-slate-800"
+                                  >
+                                    <option value={1}>1h phép (Làm 7h - W7/{chosenType}1)</option>
+                                    <option value={2}>2h phép (Làm 6h - W6/{chosenType}2)</option>
+                                    <option value={3}>3h phép (Làm 5h - W5/{chosenType}3)</option>
+                                    <option value={4}>4h phép (Làm 4h - W4/{chosenType}4)</option>
+                                    <option value={5}>5h phép (Làm 3h - W3/{chosenType}5)</option>
+                                    <option value={6}>6h phép (Làm 2h - W2/{chosenType}6)</option>
+                                    <option value={7}>7h phép (Làm 1h - W1/{chosenType}7)</option>
+                                    <option value={8}>8h (Cả ngày - {chosenType})</option>
+                                  </select>
+                                </div>
+                                <div className="text-center pt-0.5 border-t border-slate-200/60">
+                                  <span className="inline-block px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                    {curLeaveH < 8 ? `Chốt ô công: W${curWorkH}/${chosenType}${curLeaveH}` : `Chốt ô công: ${chosenType}`}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
                       ) : (
-                        <span className="font-bold text-slate-700">{req.leaveType}</span>
+                        <div className="font-bold text-slate-700 text-xs">
+                          {req.leaveType}
+                          {req.missedHours && req.missedHours < 8 && (
+                            <div className="text-[10px] font-mono text-blue-600">
+                              W{req.workedHours ?? (8 - req.missedHours)}/{req.leaveType}{req.missedHours}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td className="py-3 px-4 text-center">

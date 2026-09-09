@@ -47,7 +47,7 @@ const OFFICE_EXCLUDED_SHIFT: ShiftClassType = 'OFFICE_M_F';
 const SHIFT_OPTIONS: { value: ShiftClassType; label: string; time: string }[] = [
   { value: 'SHIFT_1', label: 'Ca 1', time: '06:00 - 14:00' },
   { value: 'SHIFT_2', label: 'Ca 2', time: '14:00 - 22:00' },
-  { value: 'OFFICE_M_F', label: 'HC', time: '07:30 - 16:00' },
+  { value: 'OFFICE_M_S', label: 'HC (T2-T7)', time: '07:30 - 16:00' },
 ];
 
 function getShiftTime(shift: ShiftClassType): { start: string; end: string } {
@@ -348,7 +348,7 @@ export const ShiftAssignmentPage: React.FC = () => {
         </div>
 
         <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2">
-          Chế độ <b>{mode === 'day' ? 'Ngày' : mode === 'week' ? 'Tuần (7 ngày)' : 'Tháng'}</b> từ <b>{baseDate}</b> {mode !== 'day' && <>→ {getDateRange(mode, baseDate).length} ngày</>} • Ca: <b>SHIFT_1 (06:00-14:00)</b>, <b>SHIFT_2 (14:00-22:00)</b>, <b>HC (07:30-16:00)</b> • Chọn nhiều nhân viên + bulk để sắp nhanh.
+          Chế độ <b>{mode === 'day' ? 'Ngày' : mode === 'week' ? 'Tuần (7 ngày)' : 'Tháng'}</b> từ <b>{baseDate}</b> {mode !== 'day' && <>→ {getDateRange(mode, baseDate).length} ngày</>} • Ca: <b>Ca 1 (06:00-14:00)</b>, <b>Ca 2 (14:00-22:00)</b>, <b>HC T2-T7 (07:30-16:00)</b> (Không sắp vào HC Văn phòng T2-T6) • Chọn nhiều nhân viên + bulk để sắp nhanh.
         </div>
       </div>
 

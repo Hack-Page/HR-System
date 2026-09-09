@@ -1,12 +1,13 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   CalendarDays, 
   Search, 
-  FileSpreadsheet,
-  CalendarRange,
-  Building2,
-  Clock3,
-  AlertTriangle
+  FileSpreadsheet, 
+  CalendarRange, 
+  Building2, 
+  Clock3, 
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -15,18 +16,36 @@ import { computeEmployeeTimesheetSummary } from '../services/formula-engine';
 import { generateCalendarDays, CalendarDay } from '../services/calendar-utils';
 import { formatPayPeriodLabel } from '../services/pay-period';
 import { useToast } from '../context/ToastContext';
+import { useModal } from '../context/ModalContext';
 import { useAuth } from '../context/AuthContext';
 import { exportTimesheetToExcel } from '../services/excel-exporter';
 
 export const TimesheetCalendarPage: React.FC = () => {
   const { success, warning } = useToast();
+  const { confirm } = useModal();
   const { departmentScope, hasPermission, systemSettings } = useAuth();
-  const [cycleMode, setCycleMode] = useState<'SEASONAL' | 'OFFICIAL' | 'ALL'>('ALL');
+  const [cycleMode, setCycleMode] = useState<'SEASONAL' | 'OFFICIAL'>('OFFICIAL');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
-  const [selectedMonth, setSelectedMonth] = useState<number>(8);
-  const [selectedYear, setSelectedYear] = useState<number>(2026);
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => {
+    const saved = localStorage.getItem('smarthr_selected_month');
+    return saved ? parseInt(saved, 10) : 8;
+  });
+  const [selectedYear, setSelectedYear] = useState<number>(() => {
+    const saved = localStorage.getItem('smarthr_selected_year');
+    return saved ? parseInt(saved, 10) : 2026;
+  });
+
+  // Tự động đồng bộ tháng/năm khi nạp file chấm công mới
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail?.month) setSelectedMonth(e.detail.month);
+      if (e.detail?.year) setSelectedYear(e.detail.year);
+    };
+    window.addEventListener('timesheet:period_changed', handler);
+    return () => window.removeEventListener('timesheet:period_changed', handler);
+  }, []);
 
   const [activeEditCell, setActiveEditCell] = useState<{
     employee: IEmployee;
@@ -38,10 +57,32 @@ export const TimesheetCalendarPage: React.FC = () => {
   const timesheets = useLiveQuery(() => db.dailyTimesheets.toArray(), []) || [];
   const overtimes = useLiveQuery(() => db.overtimeRecords.toArray(), []) || [];
 
+  const handleClearTimesheetData = async () => {
+    if (!hasPermission('MANAGE_TIMESHEET')) {
+      warning?.('Không đủ quyền', 'Bạn không có quyền làm sạch dữ liệu bảng chấm công.');
+      return;
+    }
+    const ok = await confirm({
+      title: 'Xác nhận làm sạch dữ liệu Bảng chấm công',
+      message: 'Thao tác này chỉ xóa sạch dữ liệu quẹt thẻ và tính công trên Bảng chấm công để sẵn sàng import dữ liệu nguồn mới. Toàn bộ danh mục nhân viên, hợp đồng, phụ cấp và cấu hình hoàn toàn được bảo lưu 100%.',
+      confirmText: 'Làm sạch ngay',
+      cancelText: 'Hủy bỏ',
+      type: 'danger'
+    });
+    if (ok) {
+      await db.dailyTimesheets.clear();
+      await db.rawAttendanceLogs.clear();
+      await db.overtimeRecords.clear();
+      success('Đã làm sạch bảng chấm công', 'Toàn bộ dữ liệu bảng công và tăng ca đã được xóa sạch. Sẵn sàng nạp file nguồn mới.');
+    }
+  };
+
   const filteredEmployees = useMemo(() => {
     return employees.filter(emp => {
       if (departmentScope && emp.department !== departmentScope) return false;
       if (selectedDept !== 'ALL' && emp.department !== selectedDept) return false;
+      if (cycleMode === 'OFFICIAL' && emp.contractType !== 'OFFICIAL') return false;
+      if (cycleMode === 'SEASONAL' && emp.contractType !== 'SEASONAL') return false;
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
         const m1 = emp.employeeId.toLowerCase().includes(q);
@@ -50,7 +91,7 @@ export const TimesheetCalendarPage: React.FC = () => {
       }
       return true;
     });
-  }, [employees, departmentScope, selectedDept, searchTerm]);
+  }, [employees, departmentScope, selectedDept, cycleMode, searchTerm]);
 
   const departments = Array.from(new Set(employees.map(e => e.department))).filter(Boolean);
 
@@ -66,20 +107,7 @@ export const TimesheetCalendarPage: React.FC = () => {
   const officialDays = useMemo(() => generateCalendarDays(selectedMonth, selectedYear, 'OFFICIAL'), [selectedMonth, selectedYear]);
   const seasonalDays = useMemo(() => generateCalendarDays(selectedMonth, selectedYear, 'SEASONAL'), [selectedMonth, selectedYear]);
 
-  const getCalendarForEmployee = (emp: IEmployee): CalendarDay[] => {
-    if (cycleMode === 'OFFICIAL') return officialDays;
-    if (cycleMode === 'SEASONAL') return seasonalDays;
-    return emp.contractType === 'SEASONAL' ? seasonalDays : officialDays;
-  };
-
-  const calendarDaysSingle = cycleMode === 'OFFICIAL' ? officialDays : cycleMode === 'SEASONAL' ? seasonalDays : seasonalDays;
-
-  const grouped = useMemo(() => {
-    if (cycleMode !== 'ALL') return null;
-    const official = filteredEmployees.filter(e => e.contractType === 'OFFICIAL');
-    const seasonal = filteredEmployees.filter(e => e.contractType === 'SEASONAL');
-    return { official, seasonal };
-  }, [filteredEmployees, cycleMode]);
+  const calendarDaysSingle = cycleMode === 'OFFICIAL' ? officialDays : seasonalDays;
 
   const handleCellClick = (emp: IEmployee, day: CalendarDay) => {
     if (!hasPermission('MANAGE_TIMESHEET')) {
@@ -114,8 +142,8 @@ export const TimesheetCalendarPage: React.FC = () => {
   };
 
   const handleExport = async () => {
-    await exportTimesheetToExcel(filteredEmployees, timesheets, overtimes, selectedMonth, selectedYear, cycleMode === 'ALL' ? 'OFFICIAL' : cycleMode as any, systemSettings);
-    const label = cycleMode === 'ALL' ? 'ALL (2 kỳ: Chính thức 21-20 + Thời vụ 1-31)' : cycleMode === 'OFFICIAL' ? `Chính thức ${officialPayLabel}` : `Thời vụ ${seasonalPayLabel}`;
+    await exportTimesheetToExcel(filteredEmployees, timesheets, overtimes, selectedMonth, selectedYear, cycleMode, systemSettings);
+    const label = cycleMode === 'OFFICIAL' ? `Chính thức ${officialPayLabel}` : `Thời vụ ${seasonalPayLabel}`;
     success(`Xuất file chốt công thành công!`, `Đã xuất ${filteredEmployees.length} nhân viên — ${label}`);
   };
 
@@ -156,8 +184,7 @@ export const TimesheetCalendarPage: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-slate-200 bg-white">
             {emps.map((emp, empIdx) => {
-              const empDays = getCalendarForEmployee(emp);
-              const effectiveDays = cycleMode === 'ALL' ? empDays : days;
+              const effectiveDays = days;
               const empCells: IDailyTimesheetCell[] = [];
               effectiveDays.forEach(d => {
                 const c = timesheetMap.get(`${emp.employeeId}_${d.dateStr}`);
@@ -191,7 +218,8 @@ export const TimesheetCalendarPage: React.FC = () => {
                     let cellBadge = <span className="text-slate-300 text-[11px]">-</span>;
                     if (code === 'W') cellBadge = <span className="w-6 h-6 rounded-md bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-[11px] shadow-sm" title="Đi làm đủ">W</span>;
                     else if (code === 'N') cellBadge = <span className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-800 font-bold flex items-center justify-center text-[11px] shadow-sm" title="Ca đêm">N</span>;
-                    else if (code === 'Off') cellBadge = <span className="w-6 h-6 rounded-md bg-rose-100 text-rose-800 font-bold flex items-center justify-center text-[10px] shadow-sm animate-pulse" title="Chờ bù phép">Off</span>;
+                    else if (code === 'Off' || code === 'OFF') cellBadge = <span className="w-6 h-6 rounded-md bg-rose-100 text-rose-800 font-bold flex items-center justify-center text-[10px] shadow-sm animate-pulse" title="Chờ bù phép">Off</span>;
+                    else if (code === 'ML') cellBadge = <span className="w-6 h-6 rounded-md bg-purple-100 text-purple-800 font-bold flex items-center justify-center text-[10px] border border-purple-300" title="Nghỉ thai sản">ML</span>;
                     else if (code === 'AL') cellBadge = <span className="w-6 h-6 rounded-md bg-blue-100 text-blue-800 font-bold flex items-center justify-center text-[11px]" title="Phép năm">AL</span>;
                     else if (code === 'UL') cellBadge = <span className="w-6 h-6 rounded-md bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-[11px]" title="Không lương">UL</span>;
                     else if (code === 'SL') cellBadge = <span className="w-6 h-6 rounded-md bg-pink-100 text-pink-800 font-bold flex items-center justify-center text-[11px]" title="Nghỉ ốm">SL</span>;
@@ -201,8 +229,8 @@ export const TimesheetCalendarPage: React.FC = () => {
                     else if (code === 'LA') cellBadge = <span className="w-6 h-6 rounded-md bg-orange-100 text-orange-800 font-bold flex items-center justify-center text-[11px] border border-orange-300" title={cell?.violationNote || 'Đi trễ'}>LA</span>;
                     else if (code === 'ED') cellBadge = <span className="w-6 h-6 rounded-md bg-orange-100 text-orange-800 font-bold flex items-center justify-center text-[11px] border border-orange-300" title={cell?.violationNote || 'Về sớm'}>ED</span>;
                     else if (code === 'MCO') cellBadge = <span className="w-6 h-6 rounded-md bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-[9px] border border-rose-300" title={cell?.violationNote || 'Không ra'}>MCO</span>;
-                    else if (code === 'MCI') cellBadge = <span className="w-6 h-6 rounded-md bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-[9px] border border-rose-300" title={cell?.violationNote || 'Không vào'}>MCI</span>;
-                    else if (code.includes('/2')) cellBadge = <span className="px-1 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold text-[9px] border border-blue-200">{code}</span>;
+                    else if (code.includes('/') || code.length > 2) cellBadge = <span className="px-1 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold text-[9px] border border-indigo-200 whitespace-nowrap" title={cell?.violationNote || code}>{code}</span>;
+                    else if (code) cellBadge = <span className="w-6 h-6 rounded-md bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-[10px] border border-slate-200" title={cell?.violationNote || code}>{code}</span>;
                     return (
                       <td key={day.dayIndex} onClick={() => handleCellClick(emp, day)} className={`p-1 text-center border-r border-slate-100 cursor-pointer hover:bg-orange-100/50 transition ${day.isSunday ? 'bg-amber-50/40' : (day.isSaturday ? 'bg-slate-50/40' : '')}`} title={cell?.violationNote || `Quẹt: ${cell?.checkIn || '--:--'} - ${cell?.checkOut || '--:--'}`}>
                         <div className="flex items-center justify-center">{cellBadge}</div>
@@ -244,22 +272,21 @@ export const TimesheetCalendarPage: React.FC = () => {
               <span className="ml-2 px-2.5 py-1 bg-slate-900 text-white rounded-lg text-xs font-black">Tháng {String(selectedMonth).padStart(2,'0')}/{selectedYear}</span>
             </h2>
             <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-              <span className={`px-3 py-1.5 rounded-xl border font-bold flex items-center gap-1.5 ${cycleMode !== 'SEASONAL' ? 'bg-white border-slate-200 text-slate-700' : 'bg-blue-600 text-white border-blue-600 shadow'}`}>
+              <span className={`px-3 py-1.5 rounded-xl border font-bold flex items-center gap-1.5 ${cycleMode === 'OFFICIAL' ? 'bg-slate-900 text-white border-slate-900 shadow' : 'bg-white border-slate-200 text-slate-700'}`}>
                 <CalendarRange className="w-3.5 h-3.5" /> Chính thức (21-20): <b>{officialPayLabel}</b> {cycleMode==='OFFICIAL' && <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded text-[10px]">đang xem</span>}
               </span>
-              <span className={`px-3 py-1.5 rounded-xl border font-bold flex items-center gap-1.5 ${cycleMode !== 'SEASONAL' ? 'bg-white border-slate-200 text-slate-700' : 'bg-emerald-600 text-white border-emerald-600 shadow'}`}>
+              <span className={`px-3 py-1.5 rounded-xl border font-bold flex items-center gap-1.5 ${cycleMode === 'SEASONAL' ? 'bg-emerald-600 text-white border-emerald-600 shadow' : 'bg-white border-slate-200 text-slate-700'}`}>
                 <Clock3 className="w-3.5 h-3.5" /> Thời vụ (1-31): <b>{seasonalPayLabel}</b> {cycleMode==='SEASONAL' && <span className="ml-1 px-1.5 py-0.5 bg-white/20 rounded text-[10px]">đang xem</span>}
               </span>
-              {cycleMode==='ALL' && <span className="px-3 py-1.5 rounded-xl bg-orange-500 text-white font-black border border-orange-600 shadow flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5"/> Chế độ thông minh: Chính thức 21-20 + Thời vụ 1-31 (tách nhóm)</span>}
             </div>
             <p className="text-[11px] text-slate-500 mt-2 leading-relaxed max-w-[880px]">
-              Kỳ công chính thức tính <b>21 tháng trước – 20 tháng này</b> (VD: {officialPayLabel} là kỳ tháng {selectedMonth}), thời vụ tính <b>01–cuối tháng</b> ({seasonalPayLabel}). Bảng tự động gom nhóm theo <b>loại hợp đồng</b> khi chọn “Tất cả”. Mã nhân viên quẹt thẻ phải khớp danh mục nhân viên.
+              Kỳ công chính thức tính <b>21 tháng trước – 20 tháng này</b> (VD: {officialPayLabel} là kỳ tháng {selectedMonth}), thời vụ tính <b>01–cuối tháng</b> ({seasonalPayLabel}). Bảng lọc độc lập theo <b>loại hình hợp đồng</b> để đảm bảo số liệu chính xác theo từng chu kỳ.
             </p>
             <p className="text-[11px] text-slate-400 mt-1 flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-teal-500"></span> PL=Tang/Cưới</span>
-              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> PH=Nghỉ lễ (cả CTY nghỉ)</span>
-              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span> LA/ED &lt;30p, &gt;30p chờ duyệt phép</span>
-              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> AW năng suất=(AO+AP)*BF/AN, AX chuyên cần={systemSettings.diligenceBonusConfig?.baseAmount?.toLocaleString() || '500,000'}đ</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span> PH=Nghỉ lễ</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span> LA/ED 2'-&lt;60', ≥60' chờ bù phép</span>
+              <span className="inline-flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Chuyên cần={systemSettings.diligenceBonusConfig?.baseAmount?.toLocaleString() || '500,000'}đ</span>
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -291,11 +318,14 @@ export const TimesheetCalendarPage: React.FC = () => {
             {[2025,2026,2027].map(y=> <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-bold text-slate-500 mr-1">Chu kỳ:</span>
-          <button onClick={()=>setCycleMode('ALL')} className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${cycleMode==='ALL' ? 'bg-orange-500 text-white border-orange-600 shadow' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>Tất cả (thông minh)</button>
           <button onClick={()=>setCycleMode('OFFICIAL')} className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${cycleMode==='OFFICIAL' ? 'bg-slate-900 text-white border-slate-900 shadow' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>Chính thức 21-20</button>
-          <button onClick={()=>setCycleMode('SEASONAL')} className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${cycleMode==='SEASONAL' ? 'bg-slate-900 text-white border-slate-900 shadow' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>Thời vụ 1-31</button>
+          <button onClick={()=>setCycleMode('SEASONAL')} className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${cycleMode==='SEASONAL' ? 'bg-emerald-600 text-white border-emerald-600 shadow' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>Thời vụ 1-31</button>
+          <button onClick={handleClearTimesheetData} className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl border border-rose-200 transition shadow-sm ml-1" title="Xóa nhanh dữ liệu bảng chấm công để import lại file mới">
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Làm sạch bảng công</span>
+          </button>
         </div>
       </div>
 
@@ -303,6 +333,7 @@ export const TimesheetCalendarPage: React.FC = () => {
         <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">W: Đủ công</span>
         <span className="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200">N: Ca đêm</span>
         <span className="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200">Off: Chờ bù phép</span>
+        <span className="px-2 py-0.5 rounded-lg bg-purple-50 text-purple-700 border border-purple-200">ML: Nghỉ thai sản</span>
         <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 border border-blue-200">AL: Phép năm</span>
         <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-600 border border-slate-200">UL: Không lương</span>
         <span className="px-2 py-0.5 rounded-lg bg-pink-50 text-pink-700 border border-pink-200">SL: Nghỉ ốm</span>
@@ -312,34 +343,22 @@ export const TimesheetCalendarPage: React.FC = () => {
         <span className="px-2 py-0.5 rounded-lg bg-orange-50 text-orange-700 border border-orange-200">ED: Về sớm</span>
         <span className="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200">MCO: Không ra</span>
         <span className="px-2 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-200">MCI: Không vào</span>
+        <span className="px-2 py-0.5 rounded-lg bg-sky-50 text-sky-800 border border-sky-200">BT: Đi công tác</span>
       </div>
 
-      {cycleMode === 'ALL' && grouped ? (
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            <div className="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-black"><Building2 className="w-4 h-4 text-orange-400"/>Nhóm Chính thức (21-20) — {officialPayLabel} <span className="ml-2 px-2 py-0.5 bg-white/10 rounded-full text-xs font-bold">{grouped.official.length} NV</span></div>
-              <div className="text-[11px] text-slate-300">Chu kỳ {officialPayLabel} • Tháng {String(selectedMonth).padStart(2,'0')}/{selectedYear}</div>
-            </div>
-            {renderTable(grouped.official, officialDays)}
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            <div className="px-4 py-3 bg-emerald-700 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm font-black"><Clock3 className="w-4 h-4 text-white"/>Nhóm Thời vụ (1-31) — {seasonalPayLabel} <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs font-bold">{grouped.seasonal.length} NV</span></div>
-              <div className="text-[11px] text-emerald-100">Chu kỳ {seasonalPayLabel} • Tháng {String(selectedMonth).padStart(2,'0')}/{selectedYear}</div>
-            </div>
-            {renderTable(grouped.seasonal, seasonalDays)}
-          </div>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1 flex flex-col">
+        <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
+          <span className="font-bold text-slate-800 flex items-center gap-1.5">
+            <CalendarRange className="w-4 h-4 text-orange-500"/>
+            <span>{cycleMode==='OFFICIAL' ? `Nhóm Chính thức (21-20) — ${officialPayLabel}` : `Nhóm Thời vụ (1-31) — ${seasonalPayLabel}`}</span>
+            <span className="ml-2 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-extrabold">{filteredEmployees.length} nhân viên</span>
+          </span>
+          <span className="text-slate-500 font-medium">
+            {cycleMode==='OFFICIAL' ? `${officialDays[0].dayNum}/${officialDays[0].monthNum} → ${officialDays[30].dayNum}/${officialDays[30].monthNum}` : `01/${String(selectedMonth).padStart(2,'0')} → cuối tháng`}
+          </span>
         </div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1 flex flex-col">
-          <div className="px-4 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
-            <span className="font-bold text-slate-700 flex items-center gap-1.5"><CalendarRange className="w-3.5 h-3.5 text-orange-500"/>{cycleMode==='OFFICIAL' ? `Chính thức ${officialPayLabel}` : `Thời vụ ${seasonalPayLabel}`}</span>
-            <span className="text-slate-500">{filteredEmployees.length} nhân viên • {cycleMode==='OFFICIAL' ? `${officialDays[0].dayNum}/${officialDays[0].monthNum} → ${officialDays[30].dayNum}/${officialDays[30].monthNum}` : `01/${String(selectedMonth).padStart(2,'0')} → cuối tháng`}</span>
-          </div>
-          {renderTable(filteredEmployees, calendarDaysSingle)}
-        </div>
-      )}
+        {renderTable(filteredEmployees, calendarDaysSingle)}
+      </div>
 
       {filteredEmployees.length===0 && <div className="p-6 text-center text-xs text-slate-500 bg-white rounded-2xl border border-dashed"><AlertTriangle className="w-5 h-5 mx-auto text-amber-500 mb-1"/> Không có dữ liệu nhân viên khớp bộ lọc</div>}
 
@@ -362,6 +381,7 @@ export const TimesheetCalendarPage: React.FC = () => {
                   { code: 'W', label: 'W: Đi làm đủ' },
                   { code: 'N', label: 'N: Ca đêm' },
                   { code: 'Off', label: 'Off: Chờ bù phép' },
+                  { code: 'ML', label: 'ML: Nghỉ thai sản' },
                   { code: 'AL', label: 'AL: Phép năm' },
                   { code: 'UL', label: 'UL: Không lương' },
                   { code: 'SL', label: 'SL: Nghỉ ốm' },

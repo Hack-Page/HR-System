@@ -218,11 +218,13 @@ export async function exportTimesheetToExcel(
         cell.font = { name: 'Arial', size: 9 };
         if (val === 'W') { cell.font = { color: { argb: 'FF065F46' }, bold: true } as any; }
         else if (val === 'N') { cell.font = { color: { argb: 'FF3730A3' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E7FF' } }; }
-        else if (val === 'Off') { cell.font = { color: { argb: 'FF991B1B' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; }
+        else if (val === 'Off' || val === 'OFF') { cell.font = { color: { argb: 'FF991B1B' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; }
         else if (val === 'AL') { cell.font = { color: { argb: 'FF1E40AF' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDBEAFE' } }; }
         else if (val === 'UL') { cell.font = { color: { argb: 'FF475569' } } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }; }
+        else if (val === 'SL') { cell.font = { color: { argb: 'FF9D174D' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE7F3' } }; }
         else if (val === 'PL') { cell.font = { color: { argb: 'FF0F766E' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCFBF1' } }; }
         else if (val === 'PH') { cell.font = { color: { argb: 'FF92400E' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }; }
+        else if (val === 'ML' || val === 'MATERNITY LEAVE') { cell.font = { color: { argb: 'FF6B21A8' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3E8FF' } }; }
         else if (val === 'LA' || val === 'ED') { cell.font = { color: { argb: 'FF9A3412' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } }; }
         else if (val === 'MCO' || val === 'MCI') { cell.font = { color: { argb: 'FF991B1B' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; }
         if (cellData?.violationNote) cell.note = cellData.violationNote;

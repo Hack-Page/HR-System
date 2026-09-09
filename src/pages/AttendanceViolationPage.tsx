@@ -66,8 +66,8 @@ export const AttendanceViolationPage: React.FC = () => {
       });
     }
     if (onlyPending) {
-      // Chờ duyệt: là LA/ED có late/early >=30 hoặc MCO/MCI chưa được xác thực (isViolation true)
-      list = list.filter(ts => ts.isViolation || (ts.lateMinutes && ts.lateMinutes >= 30) || (ts.earlyMinutes && ts.earlyMinutes >= 30));
+      // Chờ duyệt: là vi phạm chưa được xác thực thủ công (isViolation !== false)
+      list = list.filter(ts => ts.isViolation !== false);
     }
     // Sort by date desc
     list.sort((a, b) => b.date.localeCompare(a.date));
@@ -79,7 +79,7 @@ export const AttendanceViolationPage: React.FC = () => {
     const ed = timesheets.filter(t => t.statusCode === 'ED').length;
     const mco = timesheets.filter(t => t.statusCode === 'MCO').length;
     const mci = timesheets.filter(t => t.statusCode === 'MCI').length;
-    const pending = timesheets.filter(t => t.isViolation && (t.statusCode === 'LA' || t.statusCode === 'ED' || t.statusCode === 'MCO' || t.statusCode === 'MCI')).length;
+    const pending = timesheets.filter(t => t.isViolation !== false && (t.statusCode === 'LA' || t.statusCode === 'ED' || t.statusCode === 'MCO' || t.statusCode === 'MCI')).length;
     return { la, ed, mco, mci, pending, total: la+ed+mco+mci };
   }, [timesheets]);
 
@@ -123,9 +123,9 @@ export const AttendanceViolationPage: React.FC = () => {
             <span>Theo dõi chi tiết Đi trễ / Về sớm / Không chấm thẻ</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1 max-w-[860px] leading-relaxed">
-            Tham chiếu từ dữ liệu quẹt thẻ máy chấm công theo ca đã sắp xếp (Ca 1: 06:00-14:00, Ca 2: 14:00-22:00, HC: 07:30-16:00 T2-T7; nếu không sắp ca mặc định HC 07:30-16:00). 
-            <b>LA</b>=Đi trễ &lt;30p (Late arrival), <b>ED</b>=Về sớm &lt;30p (Early departure) — trên 30p chuyển mục <b>chờ duyệt phép</b> và vẫn hiển thị LA/ED trên map. 
-            <b>MCO</b>=Không chấm ra, <b>MCI</b>=Không chấm vào. Mục này xác thực thủ công sau khi nhận giấy tờ xác nhận ngày công.
+            Tham chiếu từ dữ liệu quẹt thẻ máy chấm công theo ca đã sắp xếp (Ca 1: 06:00-14:00, Ca 2: 14:00-22:00, HC: 07:30-16:00 T2-T7, HC VP: 07:30-16:00 T2-T6). 
+            <b>LA</b> = Đi trễ từ 2' - dưới 60', <b>ED</b> = Về sớm từ 2' - dưới 60' (có ghi chú số phút). Đi trễ/về sớm từ 60' trở lên tính là <b>OFF</b> và tự động chuyển sang menu <i>Chờ bù phép</i>.
+            <b>MCO</b> = Không chấm ra (chỉ có giờ vào), <b>MCI</b> = Không chấm vào (chỉ có giờ ra). Toàn bộ cần được HR duyệt hoặc xác thực thủ công sau khi đối chiếu giấy tờ.
           </p>
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
             <span className="px-2.5 py-1 rounded-full bg-slate-900 text-white">Tổng {stats.total}</span>
@@ -183,12 +183,12 @@ export const AttendanceViolationPage: React.FC = () => {
               className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition ${onlyPending ? 'bg-rose-600 text-white border-rose-600 shadow' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}`}
             >
               <AlertTriangle className="w-4 h-4" />
-              Chỉ chờ duyệt (&gt;30p hoặc chưa xác thực)
+              Chỉ chờ duyệt (chưa xác thực)
             </button>
           </div>
         </div>
         <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 leading-relaxed">
-          Ngưỡng &lt;30 phút: ghi LA/ED trực tiếp trên Bảng chấm công. ≥30 phút: vẫn ghi LA/ED nhưng kèm cờ <b>chờ duyệt phép</b> ở cột Trễ/Sớm, cần duyệt thủ công sau khi nhận giấy tờ. MCO/MCI cần xác thực có mặt thực tế. Thời gian trễ/sớm được tính so với ca đã sắp ở menu <b>Sắp xếp ca làm việc</b>, nếu không sắp ca mặc định HC 07:30-16:00 T2-T7.
+          Quy định: Đi trễ từ 2' - dưới 60' ghi <b>LA</b>. Về sớm từ 2' - dưới 60' ghi <b>ED</b>. Trễ hoặc sớm từ 60' trở lên tính <b>OFF</b> và chuyển sang <i>Chờ bù phép</i>. Có vào nhưng không ra ghi <b>MCI</b>. Có ra nhưng không vào ghi <b>MCO</b>. HR bấm "Duyệt W" khi nhân viên có giấy giải trình hợp lệ để xác thực đủ công.
         </div>
       </div>
 
@@ -217,7 +217,7 @@ export const AttendanceViolationPage: React.FC = () => {
                   <td colSpan={11} className="py-10 text-center text-slate-400">
                     <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-500 mb-2" />
                     <p className="font-semibold text-slate-600">Không có vi phạm nào khớp bộ lọc</p>
-                    <p className="text-[11px] text-slate-400 mt-1">LA &lt;30p, ED &lt;30p, MCO/MCI được ghi khi quẹt thiếu; ≥30p sẽ vào diện chờ duyệt phép</p>
+                    <p className="text-[11px] text-slate-400 mt-1">LA (2'-&lt;60'), ED (2'-&lt;60'), MCO, MCI được ghi khi quẹt thiếu hoặc lệch ca; cần được HR duyệt</p>
                   </td>
                 </tr>
               )}
@@ -226,7 +226,7 @@ export const AttendanceViolationPage: React.FC = () => {
                 const dept = emp?.department || '—';
                 const fullName = emp?.fullName || cell.employeeId;
                 const shiftLabel = shiftMap.get(cell.employeeId_date) || (emp?.shiftClassId ? `${emp.shiftClassId}` : 'HC 07:30-16:00');
-                const isPendingApproval = (cell.lateMinutes && cell.lateMinutes >= 30) || (cell.earlyMinutes && cell.earlyMinutes >= 30) || cell.isViolation;
+                const isPendingApproval = cell.isViolation !== false;
                 return (
                   <tr key={cell.employeeId_date} className={`hover:bg-slate-50/80 transition ${isPendingApproval ? 'bg-amber-50/20' : ''}`}>
                     <td className="py-2.5 px-3 text-slate-400 font-semibold">{idx + 1}</td>

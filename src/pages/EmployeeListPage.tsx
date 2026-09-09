@@ -10,6 +10,9 @@ import {
   Biohazard, 
   Award, 
   Calendar,
+  CalendarDays,
+  Plane,
+  Briefcase,
   CheckCircle2,
   XCircle,
   FileText,
@@ -40,6 +43,17 @@ export const EmployeeListPage: React.FC = () => {
   const [newDeptName, setNewDeptName] = useState('');
   const [showAddPos, setShowAddPos] = useState(false);
   const [newPosName, setNewPosName] = useState('');
+
+  // Unified Special Regime modal state (Thai sản & Đi công tác)
+  const [specialModalEmp, setSpecialModalEmp] = useState<IEmployee | null>(null);
+  const [specialTab, setSpecialTab] = useState<'MATERNITY' | 'BUSINESS_TRIP'>('MATERNITY');
+  const [maternityActive, setMaternityActive] = useState<boolean>(false);
+  const [maternityStart, setMaternityStart] = useState<string>('');
+  const [maternityEnd, setMaternityEnd] = useState<string>('');
+  const [tripActive, setTripActive] = useState<boolean>(false);
+  const [tripStart, setTripStart] = useState<string>('');
+  const [tripEnd, setTripEnd] = useState<string>('');
+  const [tripLocation, setTripLocation] = useState<string>('');
 
   // Query live employees
   const rawEmployees = useLiveQuery(() => db.employees.toArray(), []) || [];
@@ -151,6 +165,98 @@ export const EmployeeListPage: React.FC = () => {
     if (ok) {
       await db.employees.delete(emp.employeeId);
       success('Đã xóa nhân viên', `Nhân viên ${emp.employeeId} đã được xóa vĩnh viễn.`);
+    }
+  };
+
+  const handleOpenSpecialModal = (emp: IEmployee) => {
+    setSpecialModalEmp(emp);
+    const isMaternity = emp.status === 'MATERNITY';
+    setMaternityActive(isMaternity);
+
+    // Convert existing DD/MM/YYYY or YYYY-MM-DD to YYYY-MM-DD for input[type="date"]
+    const toInputDate = (s?: string) => {
+      if (!s) return '';
+      if (s.includes('/')) {
+        const [d, m, y] = s.split('/');
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+      return s;
+    };
+
+    const mStart = toInputDate(emp.maternityStartDate) || new Date().toISOString().slice(0, 10);
+    setMaternityStart(mStart);
+
+    if (emp.maternityEndDate) {
+      setMaternityEnd(toInputDate(emp.maternityEndDate));
+    } else {
+      try {
+        const d = new Date(mStart);
+        d.setMonth(d.getMonth() + 6);
+        setMaternityEnd(d.toISOString().slice(0, 10));
+      } catch {
+        setMaternityEnd('');
+      }
+    }
+
+    const hasTrip = !!(emp.businessTripStartDate && emp.businessTripEndDate);
+    setTripActive(hasTrip);
+    setTripStart(toInputDate(emp.businessTripStartDate) || new Date().toISOString().slice(0, 10));
+    setTripEnd(toInputDate(emp.businessTripEndDate) || new Date().toISOString().slice(0, 10));
+    setTripLocation(emp.businessTripLocation || '');
+
+    if (hasTrip && !isMaternity) {
+      setSpecialTab('BUSINESS_TRIP');
+    } else {
+      setSpecialTab('MATERNITY');
+    }
+  };
+
+  const handleSaveSpecialModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!specialModalEmp) return;
+    try {
+      const updates: Partial<IEmployee> = {};
+
+      // 1. Cập nhật Thai sản
+      if (maternityActive) {
+        if (!maternityStart || !maternityEnd) {
+          warning('Thiếu thời gian', 'Vui lòng chọn ngày bắt đầu và kết thúc nghỉ thai sản.');
+          return;
+        }
+        updates.status = 'MATERNITY';
+        updates.maternityStartDate = maternityStart;
+        updates.maternityEndDate = maternityEnd;
+      } else {
+        if (specialModalEmp.status === 'MATERNITY') {
+          updates.status = 'ACTIVE';
+        }
+        updates.maternityStartDate = undefined;
+        updates.maternityEndDate = undefined;
+      }
+
+      // 2. Cập nhật Công tác
+      if (tripActive) {
+        if (!tripStart || !tripEnd) {
+          warning('Thiếu thời gian', 'Vui lòng chọn ngày bắt đầu và kết thúc đi công tác.');
+          return;
+        }
+        updates.businessTripStartDate = tripStart;
+        updates.businessTripEndDate = tripEnd;
+        updates.businessTripLocation = tripLocation.trim() || undefined;
+      } else {
+        updates.businessTripStartDate = undefined;
+        updates.businessTripEndDate = undefined;
+        updates.businessTripLocation = undefined;
+      }
+
+      await db.employees.update(specialModalEmp.employeeId, updates);
+      success(
+        'Lưu cấu hình thành công!',
+        `Đã cập nhật chế độ Thai sản & Công tác cho nhân viên ${specialModalEmp.fullName}. Khi nạp bảng quẹt thẻ sẽ tự động áp dụng mã tương ứng (ML/BT).`
+      );
+      setSpecialModalEmp(null);
+    } catch (err: any) {
+      error('Lỗi khi lưu cấu hình', err.message);
     }
   };
 
@@ -378,17 +484,51 @@ export const EmployeeListPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4 text-center">
                       {emp.status === 'ACTIVE' && (
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold">Đang làm việc</span>
+                        emp.businessTripStartDate && emp.businessTripEndDate ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200">
+                              Đi công tác
+                            </span>
+                            <div className="text-[10px] text-blue-700 font-medium">
+                              {emp.businessTripStartDate} → {emp.businessTripEndDate}
+                            </div>
+                            {emp.businessTripLocation && (
+                              <div className="text-[9px] text-slate-500 italic max-w-[120px] truncate" title={emp.businessTripLocation}>
+                                ({emp.businessTripLocation})
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold">Đang làm việc</span>
+                        )
+                      )}
+                      {emp.status === 'MATERNITY' && (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200">
+                            Nghỉ thai sản
+                          </span>
+                          {(emp.maternityStartDate || emp.maternityEndDate) && (
+                            <div className="text-[10px] text-purple-700 font-medium">
+                              {emp.maternityStartDate} → {emp.maternityEndDate}
+                            </div>
+                          )}
+                        </div>
                       )}
                       {emp.status === 'RESIGNED' && (
                         <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-semibold">Đã nghỉ việc</span>
                       )}
-                      {emp.status === 'MATERNITY' && (
-                        <span className="px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 font-semibold">Nghỉ thai sản</span>
-                      )}
                     </td>
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {hasPermission('MANAGE_EMPLOYEES') && emp.status !== 'RESIGNED' && (
+                          <button
+                            onClick={() => handleOpenSpecialModal(emp)}
+                            className="p-1.5 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition"
+                            title="Cấu hình Chế độ Thai sản & Đi công tác"
+                          >
+                            <Plane className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleOpenAddEditModal(emp)}
                           className="p-1.5 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
@@ -640,6 +780,44 @@ export const EmployeeListPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Trạng Thái & Nghỉ Thai Sản */}
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Trạng Thái Làm Việc</label>
+                  <select
+                    value={editingEmployee.status}
+                    onChange={(e) => setEditingEmployee({ ...editingEmployee, status: e.target.value as any })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  >
+                    <option value="ACTIVE">Đang làm việc (ACTIVE)</option>
+                    <option value="MATERNITY">Nghỉ thai sản (MATERNITY)</option>
+                    <option value="RESIGNED">Đã nghỉ việc (RESIGNED)</option>
+                  </select>
+                </div>
+                {editingEmployee.status === 'MATERNITY' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Bắt đầu thai sản</label>
+                      <input
+                        type="date"
+                        value={editingEmployee.maternityStartDate || ''}
+                        onChange={(e) => setEditingEmployee({ ...editingEmployee, maternityStartDate: e.target.value })}
+                        className="w-full px-2 py-1.5 bg-slate-50 border border-purple-300 rounded-xl text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Kết thúc thai sản</label>
+                      <input
+                        type="date"
+                        value={editingEmployee.maternityEndDate || ''}
+                        onChange={(e) => setEditingEmployee({ ...editingEmployee, maternityEndDate: e.target.value })}
+                        className="w-full px-2 py-1.5 bg-slate-50 border border-purple-300 rounded-xl text-xs"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Hợp đồng & Thử việc */}
               <div className="p-4 bg-amber-50/40 rounded-xl border border-amber-200/60 space-y-3">
                 <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
@@ -848,6 +1026,183 @@ export const EmployeeListPage: React.FC = () => {
                   className="px-5 py-2 bg-gradient-to-r from-orange-500 to-rose-500 text-white font-bold rounded-xl shadow-md transition"
                 >
                   Lưu Thông Tin
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Unified Special Regimes Modal (Thai sản & Đi công tác) */}
+      {specialModalEmp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Plane className="w-5 h-5 text-purple-600" />
+                <span>Cấu Hình Chế Độ Đặc Biệt (Thai Sản & Đi Công Tác)</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Nhân viên: <b className="text-slate-700">{specialModalEmp.fullName}</b> ({specialModalEmp.employeeId}) • Bộ phận: <b className="text-slate-700">{specialModalEmp.department}</b>
+              </p>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-slate-200">
+              <button
+                type="button"
+                onClick={() => setSpecialTab('MATERNITY')}
+                className={`pb-2.5 px-4 text-xs font-bold transition border-b-2 flex items-center gap-1.5 ${
+                  specialTab === 'MATERNITY'
+                    ? 'border-purple-600 text-purple-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <span>Nghỉ Thai Sản (ML)</span>
+                {maternityActive && (
+                  <span className="w-2 h-2 rounded-full bg-purple-600"></span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSpecialTab('BUSINESS_TRIP')}
+                className={`pb-2.5 px-4 text-xs font-bold transition border-b-2 flex items-center gap-1.5 ${
+                  specialTab === 'BUSINESS_TRIP'
+                    ? 'border-blue-600 text-blue-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                <span>Đi Công Tác (BT)</span>
+                {tripActive && (
+                  <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                )}
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveSpecialModal} className="space-y-4 text-xs">
+              {specialTab === 'MATERNITY' && (
+                <div className="space-y-3 animate-in fade-in duration-150">
+                  <div className="p-3 bg-purple-50/70 rounded-xl border border-purple-200/80 space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer font-bold text-purple-950">
+                      <input
+                        type="checkbox"
+                        checked={maternityActive}
+                        onChange={(e) => setMaternityActive(e.target.checked)}
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300"
+                      />
+                      <span>Kích hoạt chế độ Nghỉ thai sản (Maternity Leave - ML)</span>
+                    </label>
+                    <p className="text-[11px] text-purple-800 leading-relaxed">
+                      Khi bật chế độ này, mọi ngày làm việc trong khoảng thời gian cấu hình khi import file chấm công sẽ <b>tự động điền mã "ML"</b> và trạng thái nhân viên hiển thị <b>"Nghỉ thai sản"</b>.
+                    </p>
+                  </div>
+
+                  {maternityActive && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Ngày bắt đầu thai sản *</label>
+                        <input
+                          type="date"
+                          value={maternityStart}
+                          onChange={(e) => {
+                            const start = e.target.value;
+                            setMaternityStart(start);
+                            if (start) {
+                              try {
+                                const d = new Date(start);
+                                d.setMonth(d.getMonth() + 6);
+                                setMaternityEnd(d.toISOString().slice(0, 10));
+                              } catch {}
+                            }
+                          }}
+                          required={maternityActive}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Ngày kết thúc (Gợi ý 6 tháng) *</label>
+                        <input
+                          type="date"
+                          value={maternityEnd}
+                          onChange={(e) => setMaternityEnd(e.target.value)}
+                          required={maternityActive}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-purple-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {specialTab === 'BUSINESS_TRIP' && (
+                <div className="space-y-3 animate-in fade-in duration-150">
+                  <div className="p-3 bg-blue-50/70 rounded-xl border border-blue-200/80 space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer font-bold text-blue-950">
+                      <input
+                        type="checkbox"
+                        checked={tripActive}
+                        onChange={(e) => setTripActive(e.target.checked)}
+                        className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300"
+                      />
+                      <span>Kích hoạt chế độ Đi công tác (Business Trip - BT)</span>
+                    </label>
+                    <p className="text-[11px] text-blue-800 leading-relaxed">
+                      Khi bật chế độ này, mọi ngày trong khoảng thời gian đi công tác khi import file chấm công sẽ <b>tự động điền mã "BT"</b> và không tính là vắng hay đi trễ.
+                    </p>
+                  </div>
+
+                  {tripActive && (
+                    <div className="space-y-3 pt-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Ngày bắt đầu công tác *</label>
+                          <input
+                            type="date"
+                            value={tripStart}
+                            onChange={(e) => setTripStart(e.target.value)}
+                            required={tripActive}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1">Ngày kết thúc công tác *</label>
+                          <input
+                            type="date"
+                            value={tripEnd}
+                            onChange={(e) => setTripEnd(e.target.value)}
+                            required={tripActive}
+                            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1">Địa điểm / Lý do công tác</label>
+                        <input
+                          type="text"
+                          value={tripLocation}
+                          onChange={(e) => setTripLocation(e.target.value)}
+                          placeholder="Ví dụ: Công tác chi nhánh Đà Nẵng, Nhà máy Hải Phòng..."
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSpecialModalEmp(null)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl transition"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl shadow-md transition"
+                >
+                  Lưu Cấu Hình
                 </button>
               </div>
             </form>
