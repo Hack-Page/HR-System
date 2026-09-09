@@ -165,21 +165,25 @@ export const TimesheetCalendarPage: React.FC = () => {
                   <div className="text-xs font-bold">{day.dayNum}</div>
                 </th>
               ))}
-              <th className="py-2.5 px-2 bg-indigo-950 text-indigo-200 text-center min-w-[72px] border-r border-indigo-900">Công Chuẩn<br/><span className="text-[10px] font-normal">AN</span></th>
-              <th className="py-2.5 px-2 bg-emerald-950 text-emerald-200 text-center min-w-[76px] border-r border-emerald-900">Công Thực Tế<br/><span className="text-[10px] font-normal">AO</span></th>
-              <th className="py-2.5 px-2 bg-blue-950 text-blue-200 text-center min-w-[65px] border-r border-blue-900">AL</th>
-              <th className="py-2.5 px-2 bg-slate-800 text-slate-200 text-center min-w-[68px] border-r border-slate-700">UL<br/><span className="text-[10px] font-normal">+Off</span></th>
-              <th className="py-2.5 px-2 bg-pink-950 text-pink-200 text-center min-w-[62px] border-r border-pink-900">SL</th>
-              <th className="py-2.5 px-2 bg-amber-950 text-amber-200 text-center min-w-[62px] border-r border-amber-900">PH</th>
-              <th className="py-2.5 px-2 bg-teal-950 text-teal-200 text-center min-w-[62px] border-r border-teal-900">PL</th>
-              <th className="py-2.5 px-2 bg-indigo-950 text-indigo-200 text-center min-w-[68px] border-r border-indigo-900">Ca Đêm N</th>
-              <th className="py-2.5 px-2 bg-slate-900 text-slate-200 text-center min-w-[72px] border-r border-slate-800">Trễ/Sớm</th>
-              <th className="py-2.5 px-2 bg-emerald-950 text-emerald-200 text-center min-w-[96px] border-r border-emerald-900">Năng suất<br/><span className="text-[10px] font-normal">AW=(AO+AP)*BF/AN</span></th>
-              <th className="py-2.5 px-2 bg-orange-950 text-orange-200 text-center min-w-[92px] border-r border-orange-900">Chuyên cần<br/><span className="text-[10px] font-normal">AX</span></th>
-              <th className="py-2.5 px-2 bg-red-950 text-red-200 text-center min-w-[78px] border-r border-red-900">Độc hại<br/><span className="text-[10px] font-normal">AY</span></th>
-              <th className="py-2.5 px-2 bg-amber-950 text-amber-200 text-center min-w-[78px] border-r border-amber-900">PCCC<br/><span className="text-[10px] font-normal">AZ</span></th>
-              <th className="py-2.5 px-2 bg-slate-800 text-slate-200 text-center min-w-[84px] border-r border-slate-700">Chi phí khác<br/><span className="text-[10px] font-normal">BA</span></th>
-              <th className="py-2.5 px-2 bg-slate-900 text-slate-200 text-center min-w-[78px]">Đoàn phí<br/><span className="text-[10px] font-normal">BB</span></th>
+              <th className="py-2.5 px-2 bg-indigo-950 text-indigo-200 text-center min-w-[72px] border-r border-indigo-900 whitespace-nowrap">Công Chuẩn</th>
+              <th className="py-2.5 px-2 bg-emerald-950 text-emerald-200 text-center min-w-[76px] border-r border-emerald-900 whitespace-nowrap">Công Thực Tế</th>
+              <th className="py-2.5 px-2 bg-blue-950 text-blue-200 text-center min-w-[55px] border-r border-blue-900 whitespace-nowrap" title="Phép năm">AL</th>
+              <th className="py-2.5 px-2 bg-rose-950 text-rose-200 text-center min-w-[55px] border-r border-rose-900 whitespace-nowrap" title="Nghỉ không phép / HR từ chối">Off</th>
+              <th className="py-2.5 px-2 bg-slate-800 text-slate-200 text-center min-w-[55px] border-r border-slate-700 whitespace-nowrap" title="Nghỉ có phép không lương">UL</th>
+              <th className="py-2.5 px-2 bg-purple-950 text-purple-200 text-center min-w-[55px] border-r border-purple-900 whitespace-nowrap" title="Nghỉ thai sản">ML</th>
+              <th className="py-2.5 px-2 bg-sky-950 text-sky-200 text-center min-w-[55px] border-r border-sky-900 whitespace-nowrap" title="Đi công tác">BT</th>
+              <th className="py-2.5 px-2 bg-pink-950 text-pink-200 text-center min-w-[55px] border-r border-pink-900 whitespace-nowrap" title="Nghỉ ốm">SL</th>
+              <th className="py-2.5 px-2 bg-amber-950 text-amber-200 text-center min-w-[55px] border-r border-amber-900 whitespace-nowrap" title="Nghỉ lễ">PH</th>
+              <th className="py-2.5 px-2 bg-teal-950 text-teal-200 text-center min-w-[55px] border-r border-teal-900 whitespace-nowrap" title="Phép chế độ">PL</th>
+              <th className="py-2.5 px-2 bg-indigo-950 text-indigo-200 text-center min-w-[68px] border-r border-indigo-900 whitespace-nowrap">Ca Đêm N</th>
+              <th className="py-2.5 px-2 bg-slate-900 text-slate-200 text-center min-w-[72px] border-r border-slate-800 whitespace-nowrap">Trễ/Sớm</th>
+              <th className="py-2.5 px-2 bg-emerald-950 text-emerald-200 text-center min-w-[96px] border-r border-emerald-900 whitespace-nowrap">Năng suất</th>
+              <th className="py-2.5 px-2 bg-orange-950 text-orange-200 text-center min-w-[92px] border-r border-orange-900 whitespace-nowrap">Chuyên cần</th>
+              <th className="py-2.5 px-2 bg-emerald-900 text-emerald-100 text-center min-w-[85px] border-r border-emerald-800 whitespace-nowrap">Thưởng thêm</th>
+              <th className="py-2.5 px-2 bg-red-950 text-red-200 text-center min-w-[78px] border-r border-red-900 whitespace-nowrap">Độc hại</th>
+              <th className="py-2.5 px-2 bg-amber-950 text-amber-200 text-center min-w-[78px] border-r border-amber-900 whitespace-nowrap">PCCC</th>
+              <th className="py-2.5 px-2 bg-slate-800 text-slate-200 text-center min-w-[84px] border-r border-slate-700 whitespace-nowrap">Chi phí khác</th>
+              <th className="py-2.5 px-2 bg-slate-900 text-slate-200 text-center min-w-[78px] whitespace-nowrap">Đoàn phí</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 bg-white">
@@ -198,8 +202,11 @@ export const TimesheetCalendarPage: React.FC = () => {
               const summary = computeEmployeeTimesheetSummary(emp, empCells, {
                 diligenceRules: deptRule ? { twoDaysULPenaltyPct: deptRule.twoDaysULPenaltyPct, threeDaysULPenaltyPct: deptRule.threeDaysULPenaltyPct } : undefined,
                 diligenceBaseAmount: emp.customAllowances?.diligenceBonus || diligenceBase,
+                countOffAsUL: systemSettings.diligenceBonusConfig?.countOffAsUL ?? true,
                 productivityBaseRate: prodBase,
-                productivityConfig: systemSettings.productivityBonusConfig
+                productivityConfig: systemSettings.productivityBonusConfig,
+                tradeUnionFee: systemSettings.tradeUnionFee ?? 40000,
+                extraBonus: emp.customAllowances?.extraBonus ?? 0
               });
 
               return (
@@ -240,14 +247,18 @@ export const TimesheetCalendarPage: React.FC = () => {
                   <td className="py-2 px-2 text-center font-bold text-slate-700 border-r border-slate-200 bg-slate-50/50">{summary.standardWD}</td>
                   <td className="py-2 px-2 text-center font-extrabold text-emerald-700 border-r border-slate-200 bg-emerald-50/30">{summary.actualWD}</td>
                   <td className="py-2 px-2 text-center font-bold text-blue-700 border-r border-slate-200">{summary.annualLeaveAL > 0 ? summary.annualLeaveAL : '-'}</td>
+                  <td className="py-2 px-2 text-center font-bold text-rose-700 border-r border-slate-200">{summary.unexcusedAbsenceOff > 0 ? summary.unexcusedAbsenceOff : '-'}</td>
                   <td className="py-2 px-2 text-center font-bold text-slate-600 border-r border-slate-200">{summary.unpaidLeaveUL > 0 ? summary.unpaidLeaveUL : '-'}</td>
+                  <td className="py-2 px-2 text-center font-bold text-purple-700 border-r border-slate-200">{summary.maternityLeaveML > 0 ? summary.maternityLeaveML : '-'}</td>
+                  <td className="py-2 px-2 text-center font-bold text-sky-700 border-r border-slate-200">{summary.businessTripBT > 0 ? summary.businessTripBT : '-'}</td>
                   <td className="py-2 px-2 text-center font-bold text-pink-700 border-r border-slate-200">{summary.sickLeaveSL > 0 ? summary.sickLeaveSL : '-'}</td>
                   <td className="py-2 px-2 text-center font-bold text-amber-700 border-r border-slate-200">{summary.publicHolidayPH > 0 ? summary.publicHolidayPH : '-'}</td>
                   <td className="py-2 px-2 text-center font-bold text-teal-700 border-r border-slate-200">{summary.specialPaidLeavePL > 0 ? summary.specialPaidLeavePL : '-'}</td>
                   <td className="py-2 px-2 text-center font-bold text-indigo-700 border-r border-slate-200">{summary.nightShiftsCount > 0 ? summary.nightShiftsCount : '-'}</td>
                   <td className="py-2 px-2 text-center text-slate-600 border-r border-slate-200 text-[11px]">{summary.lateEarlyMinutes > 0 ? `${summary.lateEarlyMinutes}p` : '-'}</td>
-                  <td className="py-2 px-2 text-center font-extrabold text-emerald-600 border-r border-slate-200" title={`(AO+AP)*BF/AN = (${summary.actualWD}+${summary.annualLeaveAL})*${prodBase.toLocaleString()}/${summary.standardWD}`}>{summary.productivityBonus > 0 ? `${summary.productivityBonus.toLocaleString()}đ` : '-'}</td>
-                  <td className="py-2 px-2 text-center font-extrabold text-orange-600 border-r border-slate-200" title={`Base ${diligenceBase.toLocaleString()}đ, UL=${summary.unpaidLeaveUL}`}>{summary.diligenceBonus.toLocaleString()}đ</td>
+                  <td className="py-2 px-2 text-center font-extrabold text-emerald-600 border-r border-slate-200" title={`Năng suất: ${summary.productivityBonus.toLocaleString()}đ`}>{summary.productivityBonus > 0 ? `${summary.productivityBonus.toLocaleString()}đ` : '-'}</td>
+                  <td className="py-2 px-2 text-center font-extrabold text-orange-600 border-r border-slate-200" title={`Chuyên cần: ${summary.diligenceBonus.toLocaleString()}đ`}>{summary.diligenceBonus.toLocaleString()}đ</td>
+                  <td className="py-2 px-2 text-center font-bold text-emerald-700 border-r border-slate-200">{summary.extraBonus > 0 ? `+${summary.extraBonus.toLocaleString()}đ` : '-'}</td>
                   <td className="py-2 px-2 text-center font-semibold text-slate-700 border-r border-slate-200">{summary.hazardousAllowance > 0 ? `${summary.hazardousAllowance.toLocaleString()}đ` : '-'}</td>
                   <td className="py-2 px-2 text-center font-semibold text-slate-700 border-r border-slate-200">{summary.pcccAllowance > 0 ? `${summary.pcccAllowance.toLocaleString()}đ` : '-'}</td>
                   <td className="py-2 px-2 text-center font-semibold text-slate-700 border-r border-slate-200">{summary.otherFees > 0 ? `${summary.otherFees.toLocaleString()}đ` : summary.otherFees < 0 ? `${summary.otherFees.toLocaleString()}đ` : '-'}</td>

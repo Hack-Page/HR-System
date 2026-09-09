@@ -11,7 +11,8 @@ import {
   Briefcase,
   ClipboardList,
   ExternalLink,
-  ShieldAlert
+  ShieldAlert,
+  TrendingUp
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -22,6 +23,7 @@ export type NavPageId =
   | 'dashboard' 
   | 'employees' 
   | 'timesheet' 
+  | 'productivityQuality'
   | 'overtime' 
   | 'leavePending' 
   | 'shiftRoster' 
@@ -97,6 +99,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onSelectPage }) =>
           <div className="flex items-center gap-2.5">
             <CalendarDays className={`w-4 h-4 ${activePage === 'timesheet' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
             <span>{t('timesheet')}</span>
+          </div>
+        </button>
+
+        {/* Tỷ Lệ Đạt Năng Suất & Chất Lượng */}
+        <button
+          onClick={() => onSelectPage('productivityQuality')}
+          className={menuItemClass(activePage === 'productivityQuality')}
+        >
+          <div className="flex items-center gap-2.5">
+            <TrendingUp className={`w-4 h-4 ${activePage === 'productivityQuality' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+            <span>Tỷ Lệ Đạt NS & CL</span>
           </div>
         </button>
 

@@ -10,9 +10,12 @@ export type FormulaKey =
   | 'actualWD'      // Total WD - Cột 41
   | 'annualLeaveAL' // Total AL - Cột 42
   | 'unpaidLeaveUL' // Total UL - Cột 43
+  | 'unexcusedAbsenceOff' // Total Off - Nghỉ không phép / từ chối phép
   | 'publicHolidayPH' // Total PH - Cột 44
   | 'sickLeaveSL'   // Total SL - Cột 45
   | 'specialPaidLeavePL' // Total PL - Cột 46
+  | 'maternityLeaveML'   // Thai sản (ML/TS)
+  | 'businessTripBT'     // Công tác (BT/CT)
   | 'nightShiftsCount' // Cột 47
   | 'lateEarly';
 
@@ -40,6 +43,7 @@ export interface CountBag {
   countSL: number;
   countPL: number;
   countOff: number;
+  countML: number;   // Nghỉ thai sản
   // Mã vi phạm chấm công mới (chỉ đếm để thống kê, không ảnh hưởng công thức cũ)
   countLA: number;   // Late Arrival - Đi trễ 2p đến <60p
   countED: number;   // Early Departure - Về sớm 2p đến <60p
@@ -58,7 +62,7 @@ export function buildCountBag(cells: { statusCode: AttendanceStatusCode }[]): Co
   const bag: CountBag = {
     countW: 0, countN: 0, countBT: 0, countW_AL: 0, countW_UL: 0,
     countAL: 0, countUL: 0, countAL_UL: 0, countPH: 0, countSL: 0, countPL: 0, countOff: 0,
-    countLA: 0, countED: 0, countMCO: 0, countMCI: 0,
+    countML: 0, countLA: 0, countED: 0, countMCO: 0, countMCI: 0,
     fractionalW: 0, fractionalAL: 0, fractionalUL: 0, fractionalSL: 0, fractionalPL: 0
   };
   for (const cell of cells) {
@@ -79,8 +83,8 @@ export function buildCountBag(cells: { statusCode: AttendanceStatusCode }[]): Co
     else if (code === 'ED') bag.countED++;
     else if (code === 'MCO') bag.countMCO++;
     else if (code === 'MCI') bag.countMCI++;
-    else if (code === 'ML' || code === 'MATERNITY LEAVE') {
-      // Chế độ nghỉ thai sản hưởng bảo hiểm xã hội
+    else if (code === 'ML' || code === 'MATERNITY LEAVE' || code === 'TS') {
+      bag.countML++;
     } else {
       // Nhận diện mã công lẻ theo giờ: W6/AL2, W4/UL4, W7/SL1, W5/PL3...
       const customMatch = code.match(/^W(\d+)\/([A-Z]+)(\d+)$/i);
@@ -97,8 +101,8 @@ export function buildCountBag(cells: { statusCode: AttendanceStatusCode }[]): Co
       }
     }
   }
-  // Off được tính như UL trong công thức chốt công
-  bag.countUL += bag.countOff;
+  // Lưu ý: Tách riêng Off và UL theo yêu cầu: UL là có phép không lương, Off là không phép
+  // Không gộp bag.countOff vào bag.countUL nữa
   return bag;
 }
 
@@ -137,16 +141,30 @@ export const FORMULA_DEFS: Record<FormulaKey, FormulaDef> = {
   unpaidLeaveUL: {
     key: 'unpaidLeaveUL',
     label: 'Không lương (UL)',
-    labelEn: 'Unpaid Leave',
-    excelHeader: 'Total UL\nKhông lương',
+    labelEn: 'Unpaid Leave (UL)',
+    excelHeader: 'Total UL\nKhông lương (có phép)',
     colIndex: 43,
-    // Lưu ý: UL bao gồm cả Off (vắng không quẹt thẻ) đã merge ở buildCountBag
+    // UL có xin phép nhưng không tính lương
     jsCompute: (c) => c.countUL + (c.countW_UL * 0.5) + (c.countAL_UL * 0.5) + (c.fractionalUL || 0),
     excelFormula: (r) => ({
-      formula: `COUNTIF(I${r}:AM${r},"UL")+COUNTIF(I${r}:AM${r},"Off")+COUNTIF(I${r}:AM${r},"W/2 UL/2")*0.5+COUNTIF(I${r}:AM${r},"AL/2 UL/2")*0.5`,
+      formula: `COUNTIF(I${r}:AM${r},"UL")+COUNTIF(I${r}:AM${r},"W/2 UL/2")*0.5+COUNTIF(I${r}:AM${r},"AL/2 UL/2")*0.5`,
       columnLetterRange: CALENDAR_RANGE
     }),
-    description: 'COUNTIF(I:AM,"UL") + COUNTIF(I:AM,"Off") + COUNTIF(I:AM,"W/2 UL/2")*0.5 + COUNTIF(I:AM,"AL/2 UL/2")*0.5'
+    description: 'COUNTIF(I:AM,"UL") + COUNTIF(I:AM,"W/2 UL/2")*0.5 + COUNTIF(I:AM,"AL/2 UL/2")*0.5'
+  },
+  unexcusedAbsenceOff: {
+    key: 'unexcusedAbsenceOff',
+    label: 'Không phép (Off)',
+    labelEn: 'Unexcused Absence (Off)',
+    excelHeader: 'Total Off\nKhông phép / Từ chối',
+    colIndex: 43.5,
+    // Off là không xin phép hoặc bị HR từ chối phép
+    jsCompute: (c) => c.countOff,
+    excelFormula: (r) => ({
+      formula: `COUNTIF(I${r}:AM${r},"Off")`,
+      columnLetterRange: CALENDAR_RANGE
+    }),
+    description: 'COUNTIF(I:AM,"Off")'
   },
   publicHolidayPH: {
     key: 'publicHolidayPH',
@@ -187,6 +205,26 @@ export const FORMULA_DEFS: Record<FormulaKey, FormulaDef> = {
     jsCompute: (c) => c.countN,
     excelFormula: (r) => ({ formula: `COUNTIF(I${r}:AM${r},"N")`, columnLetterRange: CALENDAR_RANGE }),
     description: 'COUNTIF(I:AM,"N")'
+  },
+  maternityLeaveML: {
+    key: 'maternityLeaveML',
+    label: 'Thai sản (TS)',
+    labelEn: 'Maternity Leave (ML)',
+    excelHeader: 'Total TS\nThai sản',
+    colIndex: 47.2,
+    jsCompute: (c) => c.countML,
+    excelFormula: (r) => ({ formula: `COUNTIF(I${r}:AM${r},"ML")+COUNTIF(I${r}:AM${r},"TS")`, columnLetterRange: CALENDAR_RANGE }),
+    description: 'COUNTIF(I:AM,"ML") + COUNTIF(I:AM,"TS")'
+  },
+  businessTripBT: {
+    key: 'businessTripBT',
+    label: 'Công tác (CT)',
+    labelEn: 'Business Trip (BT)',
+    excelHeader: 'Total CT\nCông tác',
+    colIndex: 47.5,
+    jsCompute: (c) => c.countBT,
+    excelFormula: (r) => ({ formula: `COUNTIF(I${r}:AM${r},"BT")+COUNTIF(I${r}:AM${r},"CT")`, columnLetterRange: CALENDAR_RANGE }),
+    description: 'COUNTIF(I:AM,"BT") + COUNTIF(I:AM,"CT")'
   },
   lateEarly: {
     key: 'lateEarly',

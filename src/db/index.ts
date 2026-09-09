@@ -10,7 +10,9 @@ import {
   ISystemSettings,
   IAccount,
   IShiftClass,
-  IRbacRole
+  IRbacRole,
+  IProductionLine,
+  IProductivityQualityRate
 } from '../types';
 
 /**
@@ -40,6 +42,8 @@ import {
  *       Giữ nguyên field boolean gốc cho UI/logic, chỉ đổi index sang Flag.
  *       Upgrade transform thật: modify mọi record cũ v2-v5 để Flag = boolean ? 1 : 0,
  *       không để index mới thiếu dữ liệu.
+ * - v7 (2026-09-09): THÊM 2 STORE CHO MA TRẬN NĂNG SUẤT & CHẤT LƯỢNG — productionLines + productivityQualityRates
+ *       Seed mặc định Line Rivet 1 và Line Rivet 2 nếu store trống, không đè dữ liệu cũ.
  */
 
 export class HRSystemDatabase extends Dexie {
@@ -54,6 +58,8 @@ export class HRSystemDatabase extends Dexie {
   accounts!: Table<IAccount, string>;
   shiftClasses!: Table<IShiftClass, string>;
   rbacRoles!: Table<IRbacRole, string>;
+  productionLines!: Table<IProductionLine, string>;
+  productivityQualityRates!: Table<IProductivityQualityRate, string>;
 
   constructor() {
     super('HRSystem_LeggettPlatt_DB');
@@ -220,6 +226,34 @@ export class HRSystemDatabase extends Dexie {
       });
     });
 
+    // v7: THÊM 2 STORE MỚI cho ma trận Năng suất & Chất lượng
+    // - productionLines: Quản lý danh sách Line sản xuất (Line Rivet 1, Line Rivet 2, mở rộng động)
+    // - productivityQualityRates: Quản lý tỷ lệ % Năng suất & % Chất lượng theo ngày của từng Line
+    // Seed mặc định 'line_rivet_1' và 'line_rivet_2' nếu store trống, bảo đảm an toàn dữ liệu cũ.
+    this.version(7).stores({
+      productionLines: 'id, name',
+      productivityQualityRates: 'lineId_date, lineId, date, month, year, [lineId+month+year], [lineId+date]'
+    }).upgrade(async tx => {
+      const now = new Date().toISOString();
+      const plCount = await (tx as any).table('productionLines').count();
+      if (plCount === 0) {
+        await (tx as any).table('productionLines').bulkPut([
+          {
+            id: 'line_rivet_1',
+            name: 'Line Rivet 1',
+            description: 'Chuyền đinh tán số 1',
+            createdAt: now
+          },
+          {
+            id: 'line_rivet_2',
+            name: 'Line Rivet 2',
+            description: 'Chuyền đinh tán số 2',
+            createdAt: now
+          }
+        ]);
+      }
+    });
+
     // Hooks tự đồng bộ Flag khi tạo/cập nhật — đảm bảo không sót chỗ set tay (v6)
     this.dailyTimesheets.hook('creating', (_p: any, obj: any) => {
       if (typeof obj.isViolationFlag === 'undefined') obj.isViolationFlag = obj.isViolation ? 1 : 0;
@@ -304,6 +338,7 @@ export async function getStorageEstimate(): Promise<StorageEstimate | null> {
 export const DEFAULT_SETTINGS: ISystemSettings = {
   overtimeRounding: 'exact',
   defaultAnnualLeaveQuota: 12,
+  tradeUnionFee: 40000,
   diligenceDeductionRules: [
     {
       department: 'ALL',
@@ -323,12 +358,18 @@ export const DEFAULT_SETTINGS: ISystemSettings = {
   productivityBonusConfig: {
     defaultBaseRate: 1000000,
     formula: '(TotalWD + TotalAL) * BaseRate / StandardWD  →  (AO+AP)*BF/AN',
+    formulaGroup2: '(TotalWD + TotalAL) * 1.000.000 / StandardWD',
+    probationGetsBonusGroup2: false,
+    deductULGroup2Rule: 'same_as_diligence',
+    applyLineRatesToGroup2: true,
     useDepartmentOverride: false,
     departmentBaseRates: {}
   },
   diligenceBonusConfig: {
     baseAmount: 500000,
     countRange: 'J:AM',
-    countOffAsUL: true
+    countOffAsUL: true,
+    twoDaysULPenaltyPct: 50,
+    threeDaysULPenaltyPct: 100
   }
 };

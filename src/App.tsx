@@ -13,6 +13,7 @@ import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { DashboardPage } from './pages/DashboardPage';
 import { EmployeeListPage } from './pages/EmployeeListPage';
 import { TimesheetCalendarPage } from './pages/TimesheetCalendarPage';
+import { ProductivityQualityPage } from './pages/ProductivityQualityPage';
 import { OvertimePage } from './pages/OvertimePage';
 import { LeavePendingPage } from './pages/LeavePendingPage';
 import { ShiftRosterPage } from './pages/ShiftRosterPage';
@@ -45,6 +46,7 @@ const Shell: React.FC = () => {
       {activePage === 'dashboard' && <DashboardPage onNavigate={setActivePage} />}
       {activePage === 'employees' && <EmployeeListPage />}
       {activePage === 'timesheet' && <TimesheetCalendarPage />}
+      {activePage === 'productivityQuality' && <ProductivityQualityPage />}
       {activePage === 'overtime' && <OvertimePage onNavigate={setActivePage} />}
       {activePage === 'leavePending' && <LeavePendingPage />}
       {activePage === 'shiftRoster' && <ShiftRosterPage />}

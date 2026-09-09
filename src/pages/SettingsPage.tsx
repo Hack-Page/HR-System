@@ -350,6 +350,37 @@ export const SettingsPage: React.FC = () => {
                   <span className="text-xs text-slate-500">% giảm trừ tiền chuyên cần (Mặc định 100%)</span>
                 </div>
               </div>
+
+              <div className="pt-2 border-t border-slate-200">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={settings.diligenceBonusConfig?.countOffAsUL ?? true}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      diligenceBonusConfig: {
+                        ...(settings.diligenceBonusConfig || { baseAmount: 500000, countRange: 'J:AM', countOffAsUL: true }),
+                        countOffAsUL: e.target.checked
+                      }
+                    })}
+                    className="rounded text-orange-500"
+                  />
+                  <span>Cộng dồn nghỉ không phép (Off) và không lương (UL) khi xét chuyên cần</span>
+                </label>
+              </div>
+
+              <div className="pt-2 border-t border-slate-200">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Mức trích đoàn phí hàng tháng:</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={settings.tradeUnionFee ?? 40000}
+                    onChange={(e) => setSettings({ ...settings, tradeUnionFee: parseFloat(e.target.value) || 0 })}
+                    className="w-28 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800"
+                  />
+                  <span className="text-xs text-slate-500">VNĐ / tháng (Mặc định 40.000 VNĐ, tuỳ chỉnh tự do)</span>
+                </div>
+              </div>
             </div>
 
             {/* Overtime & Quota Defaults */}
@@ -503,6 +534,90 @@ export const SettingsPage: React.FC = () => {
               </label>
               <div className="p-2 bg-white rounded-lg border border-orange-100 text-[11px] text-slate-600">
                 Giảm trừ lấy từ <b>Quy tắc chuyên cần</b> tab trước (50% nếu ≥2 UL, 100% nếu ≥3 UL) — áp dụng chung cho công thức này.
+              </div>
+            </div>
+
+            {/* Năng suất Nhóm 2 */}
+            <div className="p-4 bg-purple-50/40 rounded-xl border border-purple-200 space-y-4 lg:col-span-2">
+              <h4 className="font-bold text-xs text-purple-900 uppercase tracking-wider flex items-center gap-2">
+                <Layers className="w-4 h-4 text-purple-600" />
+                <span>Tiền Năng Suất Nhóm 2 — (ActualWD + AL) × 1.000.000 / StandardWD</span>
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Đơn giá năng suất chuẩn Nhóm 2 (VNĐ):</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={settings.productivityBonusConfig?.defaultBaseRate ?? 1000000}
+                      onChange={(e) => setSettings({
+                        ...settings,
+                        productivityBonusConfig: {
+                          ...settings.productivityBonusConfig!,
+                          defaultBaseRate: parseFloat(e.target.value) || 0
+                        }
+                      })}
+                      className="w-36 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold"
+                    />
+                    <span className="text-xs text-slate-500">Mặc định: 1.000.000 VNĐ</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Quy tắc giảm trừ khi nghỉ không lương / không phép (UL / Off):</label>
+                  <select
+                    value={settings.productivityBonusConfig?.deductULGroup2Rule || 'same_as_diligence'}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      productivityBonusConfig: {
+                        ...settings.productivityBonusConfig!,
+                        deductULGroup2Rule: e.target.value as any
+                      }
+                    })}
+                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium"
+                  >
+                    <option value="same_as_diligence">Nghỉ 2 ngày giảm 50%, từ 3 ngày = 0đ (theo quy tắc chuyên cần)</option>
+                    <option value="zero">Có nghỉ không lương / không phép là không được nhận (= 0đ)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-purple-100">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={!settings.productivityBonusConfig?.probationGetsBonusGroup2}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      productivityBonusConfig: {
+                        ...settings.productivityBonusConfig!,
+                        probationGetsBonusGroup2: !e.target.checked
+                      }
+                    })}
+                    className="rounded text-purple-600"
+                  />
+                  <span>Nhân viên đang thử việc không được nhận thưởng năng suất Nhóm 2 (= 0đ)</span>
+                </label>
+
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={!!settings.productivityBonusConfig?.applyLineRatesToGroup2}
+                    onChange={(e) => setSettings({
+                      ...settings,
+                      productivityBonusConfig: {
+                        ...settings.productivityBonusConfig!,
+                        applyLineRatesToGroup2: e.target.checked
+                      }
+                    })}
+                    className="rounded text-purple-600"
+                  />
+                  <span>Nhân thêm tỷ lệ % Năng Suất & % Chất Lượng của Chuyền (nếu gán Line)</span>
+                </label>
+              </div>
+
+              <div className="p-2 bg-white rounded-lg border border-purple-100 text-[11px] text-slate-600">
+                Công thức Nhóm 2: <code>(Công thực tế + Phép năm) × Đơn giá (1.000.000đ) / Công chuẩn</code>. Áp dụng cho các nhân viên thuộc Nhóm Năng Suất 2 trong Danh mục nhân viên.
               </div>
             </div>
           </div>

@@ -3,9 +3,9 @@
     "project_name": "SmartHR - Single-File In-Browser HRMS & Timekeeping System",
     "organization": "Leggett & Platt / SmartHR",
     "architecture": "Single-File In-Browser Backend (React + TypeScript + Web Worker + Dexie.js + ONNX Runtime Web Hybrid CDN)",
-    "last_updated": "2026-09-09T04:55:00Z",
-    "current_phase": "Phase 13: Ingestion Engine Date/Time Timezone Fix & Dynamic Column Mapping (106 tests green)",
-    "version": "1.4.0"
+    "last_updated": "2026-09-09T08:25:00Z",
+    "current_phase": "Phase 14: Productivity & Quality Rates, Diligence Aggregation, Timesheet Matrix Upgrade, Subagent QC Loop (116 tests green)",
+    "version": "1.5.0"
   },
   "agent_profile": {
     "role": "Senior Principal System Designer & Staff IT Software Engineer",
@@ -14,7 +14,8 @@
       "No decision on ambiguous data; clarify with user before coding",
       "100% Client-Side In-Browser Backend (Dexie.js + Web Workers)",
       "Zero Native Browser Dialogs (Custom UI Toast/Modal Only)",
-      "Mandatory State Persistence: Always update state.json after every task or fix"
+      "Mandatory State Persistence: Always update state.json after every task or fix",
+      "Subagent QC Protocol: Independent QC verification loop with learning.md"
     ]
   },
   "verified_evidence": {
@@ -39,15 +40,18 @@
       "timesheet_cycle_separation": "Method 1: Two independent views (Official 21-20 and Seasonal 01-31). 'ALL' mode removed. Automatic cleanup of old dailyTimesheets, overtimeRecords, and rawAttendanceLogs upon importing a new timesheet file. Dedicated Clear Timesheet Data button.",
       "excel_date_parsing": "cellDates: false in SheetJS + parseExcelDate with SSF parse_date_code and +12h safety buffer to avoid historical Asia/Ho_Chi_Minh 30s epoch skew. parseExcelTime for decimal fractions of day. Dynamic column header mapping.",
       "annual_leave_quota": "Fully flexible: configurable upon creation and editable by HR Manager role",
-      "diligence_reduction_rules": "Default applies company-wide, but fully customizable per department or employee class module"
+      "diligence_reduction_rules": "Default applies company-wide, but fully customizable per department or employee class module",
+      "diligence_off_ul_aggregation": "Off (unexcused) and UL (unpaid approved leave) aggregated: >= 2 days deducts 50%, >= 3 days = 0đ. Other leave types (AL, SL, PL, PH, ML, BT) do not deduct",
+      "group_2_productivity_bonus": "Formula: (actualWD + annualLeaveAL) * 1,000,000 / standardWD. Probation = 0đ. UL/Off deduction rules applied. Configurable in Settings.",
+      "trade_union_fee": "Dynamic configuration in SettingsPage and per-employee customAllowances, default 40,000đ"
     }
   },
   "verified_schemas": {
     "db_name": "HRSystem_LeggettPlatt_DB",
     "db_file": "src/db/index.ts",
-    "current_version": 6,
+    "current_version": 7,
     "stores": {
-      "employees": "employeeId PK, erpId, fullName, department, shiftClassId FK→shiftClasses.shiftClassId, contractType, status, [department+status], [contractType+status], [shiftClassId+status], [department+contractType]",
+      "employees": "employeeId PK, erpId, fullName, department, shiftClassId FK→shiftClasses.shiftClassId, contractType, status, productionLine, productivityGroup, [department+status], [contractType+status], [shiftClassId+status], [department+contractType]",
       "rawAttendanceLogs": "++id PK auto-increment, employeeId FK, date, [employeeId+date], departmentCode, [departmentCode+date]",
       "dailyTimesheets": "employeeId_date PK composite, employeeId FK, date, statusCode, isViolation (boolean giữ UI), isViolationFlag 0|1 indexed, month, year, [month+year], [employeeId+month+year], [statusCode+month+year], [isViolationFlag+month+year]",
       "overtimeRecords": "employeeId_date PK composite, employeeId FK, date, verificationStatus, month, year, [month+year], [employeeId+month+year], [verificationStatus+month+year]",
@@ -57,7 +61,9 @@
       "settings": "key PK",
       "accounts": "username PK, role FK→rbacRoles.roleId, active (boolean giữ UI), activeFlag 0|1 indexed, [role+activeFlag]",
       "shiftClasses": "shiftClassId PK, startTime, endTime, standardWorkDays, isRotating (boolean), isRotatingFlag 0|1 indexed, workDaysPattern",
-      "rbacRoles": "roleId PK, roleName, *permissions multiEntry, isSystem (boolean), isSystemFlag 0|1 indexed"
+      "rbacRoles": "roleId PK, roleName, *permissions multiEntry, isSystem (boolean), isSystemFlag 0|1 indexed",
+      "productionLines": "id PK, name, description, createdAt",
+      "productivityQualityRates": "lineId_date PK composite, lineId, date, month, year, productivityRate, qualityRate, [lineId+month+year], [lineId+date]"
     },
     "persistent_storage": {
       "helper": "ensurePersistentStorage() in src/db/index.ts + call in src/main.tsx bootstrap, fallback warning via Toast if denied",
@@ -190,6 +196,25 @@
         "Chuẩn hóa dấu phẩy số thập phân kiểu Việt Nam (.replace(',', '.')) cho các cột trễ, sớm, công, tăng ca",
         "Test suite bổ sung 45 tests mới kiểm thử date/time parsing và mô phỏng chính xác dataset LEP004 từ image copy.png (tổng 106/106 tests passed 100%)",
         "Bổ sung Principle 5 trong agent.md bắt buộc cập nhật state.json sau mỗi lần sửa đổi"
+      ]
+    },
+    "M14_Productivity_Quality_Diligence_SubagentQC_2026_09_09": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": [
+        "Khắc phục tràn chữ/rớt dòng badge trên laptop cho cột 'Nhóm Ca Làm Việc' và 'Hợp Đồng & Kỳ Công' (whitespace-nowrap + min-w)",
+        "Thêm cột 'Chuyền & Nhóm NS' và bộ lọc chuyền sản xuất trên EmployeeListPage",
+        "Tách riêng 2 cột vắng mặt: Nghỉ không phép (Off) và Nghỉ không lương (UL)",
+        "Dọn sạch ký hiệu Excel cũ trên TimesheetCalendarPage (AN, AO, AW=..., AX, AY, AZ, BA, BB)",
+        "Thêm cột Thai sản (ML), Công tác (BT), Thưởng thêm (extraBonus) trên bảng công và đồng bộ 62 cột xuất Excel",
+        "Quy tắc chuyên cần: cộng dồn Off và UL (>= 2 ngày trừ 50%, >= 3 ngày = 0đ); các phép AL, SL, PL, PH, ML, BT không trừ",
+        "Tính tiền năng suất Nhóm 2: (actualWD + AL) * 1.000.000 / standardWD; loại trừ thử việc = 0đ; trừ UL/Off theo cấu hình",
+        "Đoàn phí công đoàn động theo cấu hình settings và phụ cấp nhân viên (không hardcode 40.000đ)",
+        "Menu mới 'Tỷ Lệ Đạt NS & CL' (ProductivityQualityPage.tsx) với ma trận chu kỳ ngày, auto-save Dexie, tính TB tháng, modal thêm line, modal điền nhanh cả tháng",
+        "Cấu hình SettingsPage.tsx cho đoàn phí, chuyên cần cộng dồn, và thẻ cấu hình năng suất Nhóm 2",
+        "Dexie Schema v7 với 2 store mới: productionLines và productivityQualityRates với compound indexes [lineId+month+year] và [lineId+date]",
+        "Thiết lập quy trình Subagent QC Closed-Loop độc lập (db-qc-architect và fe-formula-qc) với learning.md (KB-001 đến KB-006)",
+        "116/116 vitest tests passed 100%, tsc --noEmit clean 0 errors"
       ]
     }
   }

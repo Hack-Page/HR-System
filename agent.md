@@ -41,6 +41,19 @@
   5. `user_confirmed_rules`: Ghi lại các quyết định nghiệp vụ mới mà người dùng đã chốt (như quy tắc quẹt sớm 6:00-6:30, không làm tròn giờ OT, quy tắc Chủ Nhật, kiểm soát 12h xoay ca).
 - **Tuyệt đối không bỏ qua bước này**: Kết thúc một lượt tương tác (turn) mà có sửa code nhưng không update `state.json` bị coi là vi phạm nghiêm trọng quy chuẩn vận hành của Agent.
 
+### Principle 6: Subagent QC Loop & Learning Protocol (`loop.md`, `subagent.md`, `learning.md`)
+- **Vai trò Coder (Agy CLI)**: Chịu trách nhiệm trực tiếp implement code từng Phase độc lập.
+- **Vai trò Subagent QC Độc Lập**:
+  - `db-qc-architect`: Chuyên gia Database Dexie.js (Schema, Migration, Indexing, Data Integrity, Unit Tests).
+  - `fe-formula-qc`: Chuyên gia Frontend UI/UX (CSS tràn chữ, Responsive, Bảng chấm công, Ma trận Năng suất & Chất lượng, Settings, Formulas).
+- **Quy trình bắt buộc (The Closed Loop)**:
+  - Coder code xong Phase nào $\rightarrow$ gọi Subagent chuyên môn tương ứng review & test độc lập.
+  - Subagent tuyệt đối không vượt quyền, không tự ý sửa code bừa bãi.
+  - Khi Subagent phát hiện lỗi $\rightarrow$ Coder tiếp nhận, ghi nhận vào `learning.md` (Triệu chứng, Nguyên nhân, Cách fix, Bài học) $\rightarrow$ Coder sửa lỗi $\rightarrow$ Gọi lại Subagent re-review.
+  - Khi Subagent xác nhận PASS với bằng chứng cụ thể $\rightarrow$ Coder mới chuyển sang Phase tiếp theo.
+  - Tuyệt đối không báo cáo kết quả đúng khi chưa test, test phải có bằng chứng cụ thể dẫn đến kết quả đúng.
+  - Tham chiếu chi tiết tại `loop.md` và `subagent.md`.
+
 ---
 
 ## 3. Workflow & Session Continuity Protocol (`state.json`)

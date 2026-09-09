@@ -22,12 +22,14 @@ describe('HRSystemDatabase v6 — Schema & Flag Indexes', () => {
       db.settings.clear(),
       db.accounts.clear(),
       db.shiftClasses.clear(),
-      db.rbacRoles.clear()
+      db.rbacRoles.clear(),
+      db.productionLines.clear(),
+      db.productivityQualityRates.clear()
     ]);
   });
 
-  it('(a) DB init không lỗi, version 6 và đủ 11 stores', async () => {
-    expect(db.verno).toBe(6);
+  it('(a) DB init không lỗi, version 7 và đủ 13 stores', async () => {
+    expect(db.verno).toBe(7);
     expect(db.employees).toBeDefined();
     expect(db.dailyTimesheets).toBeDefined();
     expect(db.overtimeRecords).toBeDefined();
@@ -39,6 +41,8 @@ describe('HRSystemDatabase v6 — Schema & Flag Indexes', () => {
     expect(db.accounts).toBeDefined();
     expect(db.shiftClasses).toBeDefined();
     expect(db.rbacRoles).toBeDefined();
+    expect(db.productionLines).toBeDefined();
+    expect(db.productivityQualityRates).toBeDefined();
   });
 
   it('(b) bulkPut/put cơ bản — employees + timesheet upsert với Flag', async () => {
@@ -210,5 +214,83 @@ describe('HRSystemDatabase v6 — Schema & Flag Indexes', () => {
   it('(e) DEFAULT_SETTINGS', () => {
     expect(Object.keys(DEFAULT_SETTINGS.rolePermissions)).toContain('HR Manager');
     expect(Object.keys(DEFAULT_SETTINGS.rolePermissions)).toContain('AD System');
+    expect(DEFAULT_SETTINGS.tradeUnionFee).toBe(40000);
+    expect(DEFAULT_SETTINGS.productivityBonusConfig.defaultBaseRate).toBe(1000000);
+    expect(DEFAULT_SETTINGS.diligenceBonusConfig.countOffAsUL).toBe(true);
+  });
+
+  it('(f) productionLines & productivityQualityRates stores + compound index', async () => {
+    const now = new Date().toISOString();
+    await db.productionLines.bulkPut([
+      { id: 'line_rivet_1', name: 'Line Rivet 1', description: 'Chuyền đinh tán số 1', createdAt: now },
+      { id: 'line_rivet_2', name: 'Line Rivet 2', description: 'Chuyền đinh tán số 2', createdAt: now }
+    ]);
+    expect(await db.productionLines.count()).toBe(2);
+
+    await db.productivityQualityRates.bulkPut([
+      { lineId_date: 'line_rivet_1_2026-08-01', lineId: 'line_rivet_1', date: '2026-08-01', productivityRate: 98.5, qualityRate: 99.0, month: 8, year: 2026 },
+      { lineId_date: 'line_rivet_1_2026-08-02', lineId: 'line_rivet_1', date: '2026-08-02', productivityRate: 102.0, qualityRate: 98.5, month: 8, year: 2026 },
+      { lineId_date: 'line_rivet_2_2026-08-01', lineId: 'line_rivet_2', date: '2026-08-01', productivityRate: 95.0, qualityRate: 100.0, month: 8, year: 2026 },
+      { lineId_date: 'line_rivet_1_2026-09-01', lineId: 'line_rivet_1', date: '2026-09-01', productivityRate: 99.0, qualityRate: 99.5, month: 9, year: 2026 }
+    ]);
+
+    // Query theo compound index [lineId+month+year]
+    const augLine1 = await db.productivityQualityRates.where('[lineId+month+year]').equals(['line_rivet_1', 8, 2026]).toArray();
+    expect(augLine1.length).toBe(2);
+
+    // Query theo compound index [lineId+date]
+    const dateQuery = await db.productivityQualityRates.where('[lineId+date]').equals(['line_rivet_2', '2026-08-01']).first();
+    expect(dateQuery?.qualityRate).toBe(100.0);
+  });
+
+  it('(g) v6 -> v7 upgrade migration callback seeds default lines and preserves data', async () => {
+    const Dexie = (await import('dexie')).default;
+    const testDbName = 'test_v6_to_v7_migration';
+    await Dexie.delete(testDbName);
+
+    // Step 1: Khởi tạo database ở version 6 với dữ liệu cũ
+    const v6Db = new Dexie(testDbName);
+    v6Db.version(6).stores({
+      employees: 'employeeId, erpId, fullName, department',
+      dailyTimesheets: 'employeeId_date, employeeId, date'
+    });
+    await v6Db.open();
+    await v6Db.table('employees').put({ employeeId: 'LEP_LEGACY_01', fullName: 'Legacy User', department: 'Production' });
+    await v6Db.close();
+
+    // Step 2: Nâng cấp lên version 7 với đúng upgrade callback của HRSystemDatabase
+    const v7Db = new Dexie(testDbName);
+    v7Db.version(6).stores({
+      employees: 'employeeId, erpId, fullName, department',
+      dailyTimesheets: 'employeeId_date, employeeId, date'
+    });
+    v7Db.version(7).stores({
+      productionLines: 'id, name',
+      productivityQualityRates: 'lineId_date, lineId, date, month, year, [lineId+month+year], [lineId+date]'
+    }).upgrade(async tx => {
+      const now = new Date().toISOString();
+      const plCount = await tx.table('productionLines').count();
+      if (plCount === 0) {
+        await tx.table('productionLines').bulkPut([
+          { id: 'line_rivet_1', name: 'Line Rivet 1', description: 'Chuyền đinh tán số 1', createdAt: now },
+          { id: 'line_rivet_2', name: 'Line Rivet 2', description: 'Chuyền đinh tán số 2', createdAt: now }
+        ]);
+      }
+    });
+
+    await v7Db.open();
+    expect(v7Db.verno).toBe(7);
+
+    // Kiểm tra dữ liệu cũ còn nguyên vẹn
+    const legacyEmp = await v7Db.table('employees').get('LEP_LEGACY_01');
+    expect(legacyEmp).toBeDefined();
+    expect(legacyEmp.fullName).toBe('Legacy User');
+
+    // Kiểm tra seed mặc định 2 line
+    const lines = await v7Db.table('productionLines').toArray();
+    expect(lines.length).toBe(2);
+    expect(lines.map(l => l.id)).toEqual(['line_rivet_1', 'line_rivet_2']);
+
+    await v7Db.delete();
   });
 });

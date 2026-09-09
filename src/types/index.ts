@@ -47,6 +47,7 @@ export interface ICustomAllowances {
   productivityBonus: number;  // Thưởng năng suất
   tradeUnionFee: number;      // Trừ đoàn phí (mặc định -40,000 VND)
   otherFees: number;          // Chi phí khác
+  extraBonus?: number;        // Thưởng thêm (hiển thị trên bảng chấm công)
 }
 
 export interface IAnnualLeaveBalance {
@@ -81,6 +82,9 @@ export interface IEmployee {
   contractEndDate?: string;   // DD/MM/YYYY
   probationMonths?: 1 | 2;    // thời gian thử việc
   probationEndDate?: string;  // DD/MM/YYYY - tự tính từ startDate + probationMonths
+  // Phân loại Line sản xuất & Nhóm năng suất mới
+  productionLine?: string;    // vd: 'Line Rivet 1', 'Line Rivet 2', v.v.
+  productivityGroup?: 1 | 2;  // Nhóm năng suất 1 hoặc 2
 }
 
 export interface IRawAttendanceLog {
@@ -243,9 +247,31 @@ export interface IRbacRole {
   updatedAt?: string;
 }
 
+/** Chuyền/Line sản xuất (vd Line Rivet 1, Line Rivet 2...) */
+export interface IProductionLine {
+  id: string;                 // PK: line_rivet_1, line_rivet_2...
+  name: string;               // Display name: 'Line Rivet 1', 'Line Rivet 2'
+  description?: string;
+  createdAt: string;          // ISO string
+}
+
+/** Bản ghi tỷ lệ Năng suất & Chất lượng theo ngày của từng Line */
+export interface IProductivityQualityRate {
+  lineId_date: string;        // PK composite: `${lineId}_${date}`, vd 'line_rivet_1_2026-08-01'
+  lineId: string;             // FK -> productionLines.id
+  date: string;               // YYYY-MM-DD
+  productivityRate: number;   // Tỷ lệ % năng suất (0..150)
+  qualityRate: number;        // Tỷ lệ % chất lượng (0..100)
+  month: number;
+  year: number;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
 export interface ISystemSettings {
   overtimeRounding: 'exact' | '15min' | '30min';
   defaultAnnualLeaveQuota: number;
+  tradeUnionFee: number;      // Mức trích đoàn phí hàng tháng (mặc định 40000, cấu hình linh hoạt)
   diligenceDeductionRules: {
     department: string;       // 'ALL' hoặc tên phòng ban
     twoDaysULPenaltyPct: number;   // 50%
@@ -253,17 +279,23 @@ export interface ISystemSettings {
   }[];
   nightShiftAllowanceRate: number; // Tỷ lệ phụ cấp ca đêm
   rolePermissions: Record<RoleType, string[]>;
-  // Công thức tiền năng suất AW = (AO+AP)*BF/AN — hệ thống hoá để custom ở Settings
+  // Công thức tiền năng suất — hệ thống hoá để custom ở Settings
   productivityBonusConfig: {
     defaultBaseRate: number;           // BF mặc định cho NV mới (vd 1.000.000)
     formula: string;                   // mô tả công thức, vd "(TotalWD+TotalAL)*BaseRate/StandardWD"
+    formulaGroup2?: string;            // công thức Nhóm 2: "(TotalWD+TotalAL)*1.000.000/StandardWD"
+    probationGetsBonusGroup2?: boolean; // false: thử việc không được nhận
+    deductULGroup2Rule?: 'zero' | 'same_as_diligence'; // 'zero': nghỉ UL mất hẳn; 'same_as_diligence': nghỉ 2 ngày trừ 50%
+    applyLineRatesToGroup2?: boolean;  // có nhân với tỷ lệ NS/CL của line không
     useDepartmentOverride: boolean;
     departmentBaseRates?: Record<string, number>; // override theo phòng ban nếu bật
   };
-  // Công thức tiền chuyên cần AX = baseAmount * (1 - IF(UL>=2,0.5, IF(UL>=3,1,0)))
+  // Công thức tiền chuyên cần — hệ thống hoá để custom ở Settings
   diligenceBonusConfig: {
     baseAmount: number;                // 500000 mặc định, custom được
     countRange: 'I:AM' | 'J:AM';       // phạm vi COUNTIF trong Excel (J:AM khớp file gốc, I:AM cho toàn kỳ)
-    countOffAsUL: boolean;             // có tính Off như UL không
+    countOffAsUL: boolean;             // Off và UL được cộng dồn theo yêu cầu
+    twoDaysULPenaltyPct?: number;      // 50%
+    threeDaysULPenaltyPct?: number;    // 100%
   };
 }

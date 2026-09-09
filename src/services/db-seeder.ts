@@ -111,6 +111,15 @@ export async function seedDatabaseIfEmpty() {
     }));
     await db.rbacRoles.bulkPut(roles);
   }
+  // v7: đảm bảo productionLines luôn có 2 line mặc định dù là fresh install
+  const plCount = await db.productionLines.count();
+  if (plCount === 0) {
+    const now = new Date().toISOString();
+    await db.productionLines.bulkPut([
+      { id: 'line_rivet_1', name: 'Line Rivet 1', description: 'Chuyền đinh tán số 1', createdAt: now },
+      { id: 'line_rivet_2', name: 'Line Rivet 2', description: 'Chuyền đinh tán số 2', createdAt: now }
+    ]);
+  }
   // v6: backfill Flag cho dữ liệu cũ nếu thiếu (phòng upgrade chưa chạy trong test fake-indexeddb)
   await db.dailyTimesheets.toCollection().modify((rec: any) => { if (typeof rec.isViolationFlag === 'undefined') rec.isViolationFlag = rec.isViolation ? 1 : 0; }).catch(() => {});
   await db.shiftRosters.toCollection().modify((rec: any) => { if (typeof rec.isRestViolationFlag === 'undefined') rec.isRestViolationFlag = rec.isRestViolation ? 1 : 0; }).catch(() => {});

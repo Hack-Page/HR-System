@@ -20,7 +20,8 @@ describe('Timesheet Business Rules & Status Logic', () => {
       expect(bag.countW).toBe(1);
       expect(bag.countN).toBe(1);
       expect(bag.countOff).toBe(2);
-      expect(bag.countUL).toBe(2); // Off and OFF are treated as UL in summary
+      expect(bag.countUL).toBe(0); // Off và UL đã tách riêng biệt
+      expect(bag.countML).toBe(1); // ML đếm riêng cho cột Thai sản
       expect(bag.countLA).toBe(1);
       expect(bag.countED).toBe(1);
       expect(bag.countMCO).toBe(1);

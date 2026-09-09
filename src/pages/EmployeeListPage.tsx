@@ -17,7 +17,8 @@ import {
   XCircle,
   FileText,
   SlidersHorizontal,
-  UserMinus
+  UserMinus,
+  Gift
 } from 'lucide-react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -36,6 +37,7 @@ export const EmployeeListPage: React.FC = () => {
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [selectedContract, setSelectedContract] = useState<string>('ALL');
   const [selectedShift, setSelectedShift] = useState<string>('ALL');
+  const [selectedLine, setSelectedLine] = useState<string>('ALL');
 
   // Modal form states
   const [editingEmployee, setEditingEmployee] = useState<IEmployee | null>(null);
@@ -55,13 +57,17 @@ export const EmployeeListPage: React.FC = () => {
   const [tripEnd, setTripEnd] = useState<string>('');
   const [tripLocation, setTripLocation] = useState<string>('');
 
-  // Query live employees
+  // Query live employees & production lines
   const rawEmployees = useLiveQuery(() => db.employees.toArray(), []) || [];
+  const rawProductionLines = useLiveQuery(() => db.productionLines.toArray(), []) || [];
 
   // Filter based on department scope and filters
   const filteredEmployees = rawEmployees.filter(emp => {
     // Dept scope for restricted roles
     if (departmentScope && emp.department !== departmentScope) {
+      return false;
+    }
+    if (selectedLine !== 'ALL' && emp.productionLine !== selectedLine) {
       return false;
     }
     // Search
@@ -99,6 +105,7 @@ export const EmployeeListPage: React.FC = () => {
         hazardousAllowance: 0,
         diligenceBonus: 500000,
         productivityBonus: 0,
+        extraBonus: 0,
         tradeUnionFee: -40000,
         otherFees: 0
       },
@@ -286,7 +293,7 @@ export const EmployeeListPage: React.FC = () => {
       </div>
 
       {/* Filters & Search */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
         {/* Search */}
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -340,6 +347,20 @@ export const EmployeeListPage: React.FC = () => {
             <option value="SHIFT_2">Ca 2 (14:00 - 22:00)</option>
           </select>
         </div>
+
+        {/* Line Filter */}
+        <div>
+          <select
+            value={selectedLine}
+            onChange={(e) => setSelectedLine(e.target.value)}
+            className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+          >
+            <option value="ALL">Tất cả Line sản xuất</option>
+            {rawProductionLines.map(l => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Employee List Table */}
@@ -352,17 +373,18 @@ export const EmployeeListPage: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
               <tr>
-                <th className="py-3 px-4">#</th>
-                <th className="py-3 px-4">Mã NV</th>
-                <th className="py-3 px-4">Họ và Tên</th>
-                <th className="py-3 px-4">Phòng Ban & Chức Vụ</th>
-                <th className="py-3 px-4 text-center">Nhóm Ca Làm Việc</th>
-                <th className="py-3 px-4 text-center">Hợp Đồng & Kỳ Công</th>
-                <th className="py-3 px-4 text-center">Thời gian hợp đồng</th>
-                <th className="py-3 px-4 text-center">Phụ Cấp Gắn Riêng</th>
-                <th className="py-3 px-4 text-center">Phép Năm Còn Lại</th>
-                <th className="py-3 px-4 text-center">Trạng Thái</th>
-                <th className="py-3 px-4 text-right">Thao Tác</th>
+                <th className="py-3 px-4 whitespace-nowrap min-w-[50px]">#</th>
+                <th className="py-3 px-4 whitespace-nowrap min-w-[90px]">Mã NV</th>
+                <th className="py-3 px-4 whitespace-nowrap min-w-[160px]">Họ và Tên</th>
+                <th className="py-3 px-4 whitespace-nowrap min-w-[150px]">Phòng Ban & Chức Vụ</th>
+                <th className="py-3 px-4 text-center whitespace-nowrap min-w-[170px]">Nhóm Ca Làm Việc</th>
+                <th className="py-3 px-4 text-center whitespace-nowrap min-w-[165px]">Hợp Đồng & Kỳ Công</th>
+                <th className="py-3 px-4 text-center whitespace-nowrap min-w-[145px]">Chuyền & Nhóm NS</th>
+                <th className="py-3 px-4 text-center whitespace-nowrap min-w-[155px]">Thời gian hợp đồng</th>
+                <th className="py-3 px-4 text-center whitespace-nowrap min-w-[150px]">Phụ Cấp Gắn Riêng</th>
+                <th className="py-3 px-4 text-center whitespace-nowrap min-w-[130px]">Phép Năm Còn Lại</th>
+                <th className="py-3 px-4 text-center whitespace-nowrap min-w-[130px]">Trạng Thái</th>
+                <th className="py-3 px-4 text-right whitespace-nowrap min-w-[110px]">Thao Tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -386,38 +408,58 @@ export const EmployeeListPage: React.FC = () => {
                       <div className="font-semibold text-slate-800">{emp.department}</div>
                       <div className="text-[11px] text-slate-500">{emp.position}</div>
                     </td>
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3 px-4 text-center whitespace-nowrap min-w-[170px]">
                       {emp.shiftClassId === 'OFFICE_M_F' && (
-                        <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-medium">HC T2-T6 (23 công)</span>
+                        <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 font-medium whitespace-nowrap inline-block">HC T2-T6 (23 công)</span>
                       )}
                       {emp.shiftClassId === 'OFFICE_M_S' && (
-                        <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-medium">HC T2-T7 (27 công)</span>
+                        <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 font-medium whitespace-nowrap inline-block">HC T2-T7 (27 công)</span>
                       )}
                       {emp.shiftClassId === 'SHIFT_1' && (
-                        <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold">Ca 1 (06h - 14h)</span>
+                        <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-bold whitespace-nowrap inline-block">Ca 1 (06h - 14h)</span>
                       )}
                       {emp.shiftClassId === 'SHIFT_2' && (
-                        <span className="px-2 py-1 rounded-full bg-pink-50 text-pink-700 font-bold">Ca 2 (14h - 22h)</span>
+                        <span className="px-2 py-1 rounded-full bg-pink-50 text-pink-700 font-bold whitespace-nowrap inline-block">Ca 2 (14h - 22h)</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3 px-4 text-center whitespace-nowrap min-w-[165px]">
                       {emp.contractType === 'OFFICIAL' ? (
-                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                        <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-semibold whitespace-nowrap inline-block">
                           Chính thức (21-20)
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-semibold">
+                        <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-semibold whitespace-nowrap inline-block">
                           Thời vụ (1-31)
                         </span>
                       )}
                       {emp.contractTerm && (
-                        <div className="text-[10px] text-slate-500 mt-1">
+                        <div className="text-[10px] text-slate-500 mt-1 whitespace-nowrap">
                           {emp.contractTerm === '1_MONTH' ? 'HĐ 1 tháng' : emp.contractTerm === '2_MONTHS' ? 'HĐ 2 tháng' : emp.contractTerm === '1_YEAR' ? 'HĐ 1 năm' : emp.contractTerm === '3_YEARS' ? 'HĐ 3 năm' : 'HĐ vĩnh viễn'}
                           {emp.contractEndDate ? ` • ${emp.contractEndDate}` : ''}
                         </div>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3 px-4 text-center whitespace-nowrap min-w-[145px]">
+                      <div className="flex flex-col items-center gap-1">
+                        {emp.productionLine ? (
+                          <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-medium text-[11px] whitespace-nowrap inline-block">
+                            {rawProductionLines.find(l => l.id === emp.productionLine)?.name || emp.productionLine}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-slate-400">—</span>
+                        )}
+                        {emp.productivityGroup && (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border whitespace-nowrap inline-block ${
+                            emp.productivityGroup === 1
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          }`}>
+                            {emp.productivityGroup === 1 ? 'Nhóm 1' : 'Nhóm 2'}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-center whitespace-nowrap min-w-[155px]">
                       {(() => {
                         const now = new Date();
                         const probDays = emp.probationEndDate ? daysUntil(emp.probationEndDate, now) : null;
@@ -425,10 +467,10 @@ export const EmployeeListPage: React.FC = () => {
                         if (isProbation && emp.probationMonths) {
                           return (
                             <>
-                              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold">
+                              <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 font-semibold whitespace-nowrap inline-block">
                                 Thử việc {emp.probationMonths} tháng
                               </span>
-                              <div className="text-[10px] text-slate-400 mt-0.5">đến {emp.probationEndDate}</div>
+                              <div className="text-[10px] text-slate-400 mt-0.5 whitespace-nowrap">đến {emp.probationEndDate}</div>
                             </>
                           );
                         }
@@ -440,41 +482,47 @@ export const EmployeeListPage: React.FC = () => {
                           const isWarn = d !== null && d >= 0 && d <= 30;
                           return (
                             <>
-                              <span className={`px-2 py-0.5 rounded-full border font-semibold ${isUrgent ? 'bg-rose-50 text-rose-700 border-rose-200' : isWarn ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                              <span className={`px-2 py-0.5 rounded-full border font-semibold whitespace-nowrap inline-block ${isUrgent ? 'bg-rose-50 text-rose-700 border-rose-200' : isWarn ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                                 {label}
                               </span>
-                              <div className="text-[10px] text-slate-500 mt-0.5">{emp.contractEndDate} {d !== null && d >= 0 ? `• còn ${d} ngày` : d !== null && d < 0 ? '• đã hết hạn' : ''}</div>
+                              <div className="text-[10px] text-slate-500 mt-0.5 whitespace-nowrap">{emp.contractEndDate} {d !== null && d >= 0 ? `• còn ${d} ngày` : d !== null && d < 0 ? '• đã hết hạn' : ''}</div>
                             </>
                           );
                         }
                         if (emp.contractTerm) {
                           const label = emp.contractTerm === '1_MONTH' ? 'HĐ 1 tháng' : emp.contractTerm === '2_MONTHS' ? 'HĐ 2 tháng' : emp.contractTerm === '1_YEAR' ? 'HĐ 1 năm' : emp.contractTerm === '3_YEARS' ? 'HĐ 3 năm' : 'Vĩnh viễn';
-                          return <span className="px-2 py-0.5 rounded-full bg-slate-50 text-slate-700 border font-medium">{label}</span>;
+                          return <span className="px-2 py-0.5 rounded-full bg-slate-50 text-slate-700 border font-medium whitespace-nowrap inline-block">{label}</span>;
                         }
                         return <span className="text-slate-400 text-[11px]">—</span>;
                       })()}
                     </td>
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3 px-4 text-center whitespace-nowrap min-w-[150px]">
                       <div className="flex items-center justify-center gap-1.5 flex-wrap">
                         {isPCCC && (
-                          <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold border border-amber-200 flex items-center gap-1" title={`Trợ cấp PCCC: ${emp.customAllowances.pcccAllowance.toLocaleString()} VNĐ`}>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold border border-amber-200 flex items-center gap-1 whitespace-nowrap" title={`Trợ cấp PCCC: ${emp.customAllowances.pcccAllowance.toLocaleString()} VNĐ`}>
                             <Flame className="w-3 h-3 text-amber-600" />
                             PCCC
                           </span>
                         )}
                         {isHazard && (
-                          <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 font-bold border border-rose-200 flex items-center gap-1" title={`Tiền độc hại: ${emp.customAllowances.hazardousAllowance.toLocaleString()} VNĐ`}>
+                          <span className="px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 font-bold border border-rose-200 flex items-center gap-1 whitespace-nowrap" title={`Tiền độc hại: ${emp.customAllowances.hazardousAllowance.toLocaleString()} VNĐ`}>
                             <Biohazard className="w-3 h-3 text-rose-600" />
                             Độc hại
                           </span>
                         )}
-                        {!isPCCC && !isHazard && (
+                        {emp.customAllowances?.extraBonus && emp.customAllowances.extraBonus > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 flex items-center gap-1 whitespace-nowrap" title={`Thưởng thêm: ${emp.customAllowances.extraBonus.toLocaleString()} VNĐ`}>
+                            <Gift className="w-3 h-3 text-emerald-600" />
+                            +{(emp.customAllowances.extraBonus / 1000).toLocaleString()}k
+                          </span>
+                        )}
+                        {!isPCCC && !isHazard && (!emp.customAllowances?.extraBonus || emp.customAllowances.extraBonus <= 0) && (
                           <span className="text-slate-400 font-normal">Tiêu chuẩn</span>
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-center">
-                      <span className={`px-2.5 py-1 rounded-full font-bold ${
+                    <td className="py-3 px-4 text-center whitespace-nowrap min-w-[130px]">
+                      <span className={`px-2.5 py-1 rounded-full font-bold whitespace-nowrap inline-block ${
                         (emp.annualLeaveBalance?.remainingDays ?? 12) <= 2
                           ? 'bg-rose-100 text-rose-700'
                           : 'bg-emerald-100 text-emerald-800'
@@ -482,14 +530,14 @@ export const EmployeeListPage: React.FC = () => {
                         {emp.annualLeaveBalance?.remainingDays ?? 12} / {emp.annualLeaveBalance?.initialQuota ?? 12} ngày
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-3 px-4 text-center whitespace-nowrap min-w-[130px]">
                       {emp.status === 'ACTIVE' && (
                         emp.businessTripStartDate && emp.businessTripEndDate ? (
                           <div className="flex flex-col items-center gap-0.5">
-                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200">
+                            <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-bold border border-blue-200 whitespace-nowrap inline-block">
                               Đi công tác
                             </span>
-                            <div className="text-[10px] text-blue-700 font-medium">
+                            <div className="text-[10px] text-blue-700 font-medium whitespace-nowrap">
                               {emp.businessTripStartDate} → {emp.businessTripEndDate}
                             </div>
                             {emp.businessTripLocation && (
@@ -499,26 +547,26 @@ export const EmployeeListPage: React.FC = () => {
                             )}
                           </div>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold">Đang làm việc</span>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-semibold whitespace-nowrap inline-block">Đang làm việc</span>
                         )
                       )}
                       {emp.status === 'MATERNITY' && (
                         <div className="flex flex-col items-center gap-0.5">
-                          <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200">
+                          <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold border border-purple-200 whitespace-nowrap inline-block">
                             Nghỉ thai sản
                           </span>
                           {(emp.maternityStartDate || emp.maternityEndDate) && (
-                            <div className="text-[10px] text-purple-700 font-medium">
+                            <div className="text-[10px] text-purple-700 font-medium whitespace-nowrap">
                               {emp.maternityStartDate} → {emp.maternityEndDate}
                             </div>
                           )}
                         </div>
                       )}
                       {emp.status === 'RESIGNED' && (
-                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-semibold">Đã nghỉ việc</span>
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-semibold whitespace-nowrap inline-block">Đã nghỉ việc</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right whitespace-nowrap min-w-[110px]">
                       <div className="flex items-center justify-end gap-1">
                         {hasPermission('MANAGE_EMPLOYEES') && emp.status !== 'RESIGNED' && (
                           <button
@@ -780,6 +828,38 @@ export const EmployeeListPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Production Line & Productivity Group */}
+              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Chuyền / Line Sản Xuất</label>
+                  <select
+                    value={editingEmployee.productionLine || ''}
+                    onChange={(e) => setEditingEmployee({ ...editingEmployee, productionLine: e.target.value || undefined })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  >
+                    <option value="">-- Không thuộc Line --</option>
+                    {rawProductionLines.map(l => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Nhóm Năng Suất</label>
+                  <select
+                    value={editingEmployee.productivityGroup || ''}
+                    onChange={(e) => setEditingEmployee({
+                      ...editingEmployee,
+                      productivityGroup: e.target.value ? (parseInt(e.target.value) as 1 | 2) : undefined
+                    })}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                  >
+                    <option value="">-- Không phân nhóm --</option>
+                    <option value="1">Nhóm 1 (Hưởng theo % Đạt Line)</option>
+                    <option value="2">Nhóm 2 (Đơn giá 1.000.000đ × công thực tế / chuẩn)</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Trạng Thái & Nghỉ Thai Sản */}
               <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
                 <div>
@@ -917,7 +997,7 @@ export const EmployeeListPage: React.FC = () => {
                   <SlidersHorizontal className="w-4 h-4 text-orange-600" />
                   <span>Phân Bổ Phụ Cấp Linh Hoạt Từng Cá Nhân (Custom Allowances)</span>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="block font-medium text-slate-700 mb-1">Trợ cấp PCCC (VNĐ)</label>
                     <input
@@ -958,6 +1038,21 @@ export const EmployeeListPage: React.FC = () => {
                         customAllowances: {
                           ...editingEmployee.customAllowances,
                           diligenceBonus: parseFloat(e.target.value) || 0
+                        }
+                      })}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">Thưởng Thêm (VNĐ)</label>
+                    <input
+                      type="number"
+                      value={editingEmployee.customAllowances?.extraBonus || 0}
+                      onChange={(e) => setEditingEmployee({
+                        ...editingEmployee,
+                        customAllowances: {
+                          ...editingEmployee.customAllowances,
+                          extraBonus: parseFloat(e.target.value) || 0
                         }
                       })}
                       className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs"

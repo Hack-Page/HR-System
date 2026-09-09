@@ -80,7 +80,7 @@ export async function exportTimesheetToExcel(
     ws.getCell('E4').font = { name: 'Arial', size: 8, color: { argb: 'FF1E40AF' } };
     ws.getCell('G4').value = 'UL: Nghỉ không lương';
     ws.getCell('G4').font = { name: 'Arial', size: 8, color: { argb: 'FF475569' } };
-    ws.getCell('H4').value = `AW=(AO+AP)*BF/AN  •  AX=${settings.diligenceBonusConfig.baseAmount.toLocaleString()}*(1-IF(COUNTIF(${settings.diligenceBonusConfig.countRange},"UL")>=2,…))  •  BF ẩn = baseRate năng suất`;
+    ws.getCell('H4').value = `Đoàn phí: ${settings.tradeUnionFee?.toLocaleString() || '40,000'}đ • Chuyên cần: ${settings.diligenceBonusConfig.baseAmount.toLocaleString()}đ (Off+UL xét trừ) • Năng suất Nhóm 2 chuẩn 1.000.000đ`;
     ws.getCell('H4').font = { name: 'Arial', size: 7, color: { argb: 'FF64748B' } };
     ws.getRow(4).height = 12;
 
@@ -134,27 +134,31 @@ export async function exportTimesheetToExcel(
       ws.getColumn(colIdx).width = 5.5;
     });
 
-    // Summary headers 40-58 (AN-BF) — giữ đúng 19 cột như file gốc, thêm metadata BF
+    // Summary headers (col 40-62) — đã bỏ các ký hiệu AN, AO, AW=..., AX, AY, AZ, BA, BB
     const summaryHeaders = [
-      'Total Standard WD\nCông chuẩn\nAN',
-      'Total WD\nCông thực tế\nAO',
-      'Total AL\nPhép năm\nAP',
-      'Total UL\nKhông lương\nAQ',
-      'Total PH\nNghỉ lễ\nAR',
-      'Total SL\nNghỉ ốm\nAS',
-      'Total PL\nPhép chế độ\nAT',
-      'Số ngày làm ban đêm\nNight Shifts\nAU',
-      'Đi trễ về sớm\nLate/Early\nAV',
-      'Thưởng năng suất\nPerformance Bonus\nAW',
-      'Tiền chuyên cần\nDiligence Allowance\nAX',
-      'Tiền độc hại\nHazardous Allowance\nAY',
-      'Tiền trợ cấp PCCC\nFirefighting Allowance\nAZ',
-      'Các chi phí khác\nOther fees\nBA',
-      'Trừ đoàn phí\nTrade Union fee\nBB',
-      'Tháng\nMonth\nBC',
-      'Năm\nYear\nBD',
-      'Ghi chú\nRemarks\nBE',
-      'BaseRate Năng suất (ẩn)\nBF (hidden)'
+      'Total Standard WD\nCông chuẩn',
+      'Total WD\nCông thực tế',
+      'Total AL\nPhép năm',
+      'Total Off\nKhông phép',
+      'Total UL\nKhông lương',
+      'Total ML\nThai sản',
+      'Total BT\nCông tác',
+      'Total PH\nNghỉ lễ',
+      'Total SL\nNghỉ ốm',
+      'Total PL\nPhép chế độ',
+      'Số ngày làm ban đêm\nNight Shifts',
+      'Đi trễ về sớm\nLate/Early',
+      'Thưởng năng suất\nPerformance Bonus',
+      'Tiền chuyên cần\nDiligence Allowance',
+      'Thưởng thêm\nExtra Bonus',
+      'Tiền độc hại\nHazardous Allowance',
+      'Tiền trợ cấp PCCC\nFirefighting Allowance',
+      'Các chi phí khác\nOther fees',
+      'Trừ đoàn phí\nTrade Union fee',
+      'Tháng\nMonth',
+      'Năm\nYear',
+      'Ghi chú\nRemarks',
+      'BaseRate Năng suất (ẩn)\nBaseRate (hidden)'
     ];
 
     summaryHeaders.forEach((hdr, idx) => {
@@ -162,16 +166,17 @@ export async function exportTimesheetToExcel(
       ws.mergeCells(5, colIdx, 7, colIdx);
       const cell = ws.getCell(5, colIdx);
       cell.value = hdr;
-      const isAW = idx === 9;
-      const isAX = idx === 10;
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isAW ? 'FF065F46' : isAX ? 'FF92400E' : 'FF002D62' } };
+      const isProd = idx === 12;
+      const isDilig = idx === 13;
+      const isExtra = idx === 14;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: isProd ? 'FF065F46' : isDilig ? 'FF92400E' : isExtra ? 'FF047857' : 'FF002D62' } };
       cell.font = { name: 'Arial', size: 8, bold: true, color: { argb: 'FFFFFFFF' } };
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-      ws.getColumn(colIdx).width = idx === 18 ? 18 : idx >= 9 && idx <= 14 ? 13 : 11;
+      ws.getColumn(colIdx).width = idx === 22 ? 18 : (idx >= 12 && idx <= 18 ? 13 : 11);
     });
 
-    // Ẩn cột BF (58) như file gốc — width 23 nhưng hidden
-    ws.getColumn(58).hidden = true;
+    // Ẩn cột BaseRate ẩn (62)
+    ws.getColumn(62).hidden = true;
 
     // Dữ liệu NV
     const timesheetCellMap = new Map<string, IDailyTimesheetCell>();
@@ -194,8 +199,11 @@ export async function exportTimesheetToExcel(
       const summary = computeEmployeeTimesheetSummary(emp, empCells, {
         diligenceRules: deptRule ? { twoDaysULPenaltyPct: deptRule.twoDaysULPenaltyPct, threeDaysULPenaltyPct: deptRule.threeDaysULPenaltyPct } : undefined,
         diligenceBaseAmount: diligenceBase,
+        countOffAsUL: settings.diligenceBonusConfig?.countOffAsUL ?? true,
         productivityBaseRate: prodBase,
-        productivityConfig: settings.productivityBonusConfig
+        productivityConfig: settings.productivityBonusConfig,
+        tradeUnionFee: settings.tradeUnionFee ?? 40000,
+        extraBonus: emp.customAllowances?.extraBonus ?? 0
       });
 
       ws.getCell(r, 1).value = empIdx + 1;
@@ -225,50 +233,51 @@ export async function exportTimesheetToExcel(
         else if (val === 'PL') { cell.font = { color: { argb: 'FF0F766E' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCCFBF1' } }; }
         else if (val === 'PH') { cell.font = { color: { argb: 'FF92400E' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }; }
         else if (val === 'ML' || val === 'MATERNITY LEAVE') { cell.font = { color: { argb: 'FF6B21A8' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3E8FF' } }; }
+        else if (val === 'BT') { cell.font = { color: { argb: 'FF0284C7' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } }; }
         else if (val === 'LA' || val === 'ED') { cell.font = { color: { argb: 'FF9A3412' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } }; }
         else if (val === 'MCO' || val === 'MCI') { cell.font = { color: { argb: 'FF991B1B' }, bold: true } as any; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }; }
         if (cellData?.violationNote) cell.note = cellData.violationNote;
       }
 
-      // AN = standardWD (value)
+      // Summary columns (40..62)
       ws.getCell(r, 40).value = summary.standardWD;
       ws.getCell(r, 40).numFmt = '0';
-      // AO - AP formulas
-      ws.getCell(r, 41).value = { formula: FORMULA_DEFS.actualWD.excelFormula(r).formula, result: summary.actualWD } as any;
-      ws.getCell(r, 42).value = { formula: FORMULA_DEFS.annualLeaveAL.excelFormula(r).formula, result: summary.annualLeaveAL } as any;
-      ws.getCell(r, 43).value = { formula: FORMULA_DEFS.unpaidLeaveUL.excelFormula(r).formula, result: summary.unpaidLeaveUL } as any;
-      ws.getCell(r, 44).value = { formula: FORMULA_DEFS.publicHolidayPH.excelFormula(r).formula, result: summary.publicHolidayPH } as any;
-      ws.getCell(r, 45).value = { formula: FORMULA_DEFS.sickLeaveSL.excelFormula(r).formula, result: summary.sickLeaveSL } as any;
-      ws.getCell(r, 46).value = { formula: FORMULA_DEFS.specialPaidLeavePL.excelFormula(r).formula, result: summary.specialPaidLeavePL } as any;
-      ws.getCell(r, 47).value = summary.nightShiftsCount;
-      ws.getCell(r, 48).value = summary.lateEarlyMinutes > 0 ? summary.lateEarlyMinutes : '';
-      // AW năng suất = (AO+AP)*BF/AN — hệ thống hoá
-      const awFormula = PRODUCTIVITY_FORMULA.buildExcelFormula(r);
-      ws.getCell(r, 49).value = prodBase > 0 ? ({ formula: awFormula.substring(1), result: summary.productivityBonus } as any) : '';
-      ws.getCell(r, 49).numFmt = '#,##0';
-      // AX chuyên cần — custom baseAmount & countRange
-      const axFormula = DILIGENCE_FORMULA.buildExcelFormula(r, diligenceBase, settings.diligenceBonusConfig.countRange);
-      ws.getCell(r, 50).value = { formula: axFormula.substring(1), result: summary.diligenceBonus } as any;
-      ws.getCell(r, 50).numFmt = '#,##0';
-      ws.getCell(r, 51).value = summary.hazardousAllowance || '';
-      ws.getCell(r, 51).numFmt = '#,##0';
-      ws.getCell(r, 52).value = summary.pcccAllowance || '';
+      ws.getCell(r, 41).value = summary.actualWD;
+      ws.getCell(r, 42).value = summary.annualLeaveAL;
+      ws.getCell(r, 43).value = summary.unexcusedAbsenceOff;
+      ws.getCell(r, 44).value = summary.unpaidLeaveUL;
+      ws.getCell(r, 45).value = summary.maternityLeaveML;
+      ws.getCell(r, 46).value = summary.businessTripBT;
+      ws.getCell(r, 47).value = summary.publicHolidayPH;
+      ws.getCell(r, 48).value = summary.sickLeaveSL;
+      ws.getCell(r, 49).value = summary.specialPaidLeavePL;
+      ws.getCell(r, 50).value = summary.nightShiftsCount;
+      ws.getCell(r, 51).value = summary.lateEarlyMinutes > 0 ? summary.lateEarlyMinutes : '';
+      ws.getCell(r, 52).value = summary.productivityBonus || '';
       ws.getCell(r, 52).numFmt = '#,##0';
-      ws.getCell(r, 53).value = summary.otherFees || '';
+      ws.getCell(r, 53).value = summary.diligenceBonus || '';
       ws.getCell(r, 53).numFmt = '#,##0';
-      ws.getCell(r, 54).value = summary.tradeUnionFee;
+      ws.getCell(r, 54).value = summary.extraBonus || '';
       ws.getCell(r, 54).numFmt = '#,##0';
-      ws.getCell(r, 55).value = month;
-      ws.getCell(r, 56).value = year;
-      ws.getCell(r, 57).value = emp.notes || '';
-      ws.getCell(r, 58).value = prodBase;
+      ws.getCell(r, 55).value = summary.hazardousAllowance || '';
+      ws.getCell(r, 55).numFmt = '#,##0';
+      ws.getCell(r, 56).value = summary.pcccAllowance || '';
+      ws.getCell(r, 56).numFmt = '#,##0';
+      ws.getCell(r, 57).value = summary.otherFees || '';
+      ws.getCell(r, 57).numFmt = '#,##0';
+      ws.getCell(r, 58).value = summary.tradeUnionFee || '';
       ws.getCell(r, 58).numFmt = '#,##0';
+      ws.getCell(r, 59).value = month;
+      ws.getCell(r, 60).value = year;
+      ws.getCell(r, 61).value = emp.notes || '';
+      ws.getCell(r, 62).value = prodBase;
+      ws.getCell(r, 62).numFmt = '#,##0';
 
       // Borders + number formats
-      for (let c = 1; c <= 58; c++) {
+      for (let c = 1; c <= 62; c++) {
         const cell = ws.getCell(r, c);
         cell.border = { top: { style: 'thin', color: { argb: 'FFE2E8F0' } }, left: { style: 'thin', color: { argb: 'FFE2E8F0' } }, bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } }, right: { style: 'thin', color: { argb: 'FFE2E8F0' } } };
-        if (c >= 40 && c <= 48) cell.numFmt = '0.0';
+        if (c >= 40 && c <= 51) cell.numFmt = '0.0';
       }
       // Tô màu dòng theo contract
       if (emp.contractType === 'SEASONAL') {
@@ -280,7 +289,7 @@ export async function exportTimesheetToExcel(
     const footerRow = 8 + sheetEmployees.length + 1;
     ws.mergeCells(footerRow, 1, footerRow, 8);
     const foot = ws.getCell(footerRow, 1);
-    foot.value = `Tổng ${sheetEmployees.length} nhân viên • Kỳ ${cycleLabel} • BF (cột ẩn 58) là baseRate năng suất • AX phạm vi ${settings.diligenceBonusConfig.countRange} • Công thức AW=${PRODUCTIVITY_FORMULA.excelFormulaExample}, AX=${settings.diligenceBonusConfig.baseAmount.toLocaleString()}*(1-IF(COUNTIF(${settings.diligenceBonusConfig.countRange},"UL")>=...))`;
+    foot.value = `Tổng ${sheetEmployees.length} nhân viên • Kỳ ${cycleLabel} • BaseRate năng suất ẩn (cột 62) • Chuyên cần xét trừ cộng dồn Off & UL`;
     foot.font = { name: 'Arial', size: 7, italic: true, color: { argb: 'FF64748B' } };
     foot.alignment = { horizontal: 'left', vertical: 'middle' };
 
