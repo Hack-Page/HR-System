@@ -3,9 +3,9 @@
     "project_name": "SmartHR - Single-File In-Browser HRMS & Timekeeping System",
     "organization": "Leggett & Platt / SmartHR",
     "architecture": "Single-File In-Browser Backend (React + TypeScript + Web Worker + Dexie.js + ONNX Runtime Web Hybrid CDN)",
-    "last_updated": "2026-09-09T08:25:00Z",
-    "current_phase": "Phase 14: Productivity & Quality Rates, Diligence Aggregation, Timesheet Matrix Upgrade, Subagent QC Loop (116 tests green)",
-    "version": "1.5.0"
+    "last_updated": "2026-09-09T10:25:00Z",
+    "current_phase": "Phase 16: Opencode Audit & Domain Requirements Fully Remediated (ACID Import, RBAC Menus, Department Admin flows, Multi-format Probation, OCR Master Lookup, Atomic Seeder - 118/118 tests green, 0 tsc errors)",
+    "version": "1.6.0"
   },
   "agent_profile": {
     "role": "Senior Principal System Designer & Staff IT Software Engineer",
@@ -215,6 +215,35 @@
         "Dexie Schema v7 với 2 store mới: productionLines và productivityQualityRates với compound indexes [lineId+month+year] và [lineId+date]",
         "Thiết lập quy trình Subagent QC Closed-Loop độc lập (db-qc-architect và fe-formula-qc) với learning.md (KB-001 đến KB-006)",
         "116/116 vitest tests passed 100%, tsc --noEmit clean 0 errors"
+      ]
+    },
+    "M15_Codebase_Full_Remediation_2026_09_09": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": [
+        "Task 1.1: Snapshot Sync OneDrive v3.1 đồng bộ trọn vẹn 2 store productionLines và productivityQualityRates trong transaction nguyên tử, bổ sung unit test (h) trong db.test.ts",
+        "Task 1.2: Xử lý triệt để Split Month 21-20 khi query IndexedDB cho ma trận tỷ lệ NS/CL cả trên UI (ProductivityQualityPage.tsx) và Excel Exporter",
+        "Task 1.3: Đồng bộ toàn diện formula-engine.worker.ts với formula-defs (ML, TS, BT, CT, LA, ED, MCO, MCI, công thức Nhóm 2, chuyên cần dồn Off+UL)",
+        "Task 1.4: Nút Xoá Bảng Chấm Công và nạp file mới dọn dẹp sạch sẽ leaveRequests và shiftRosters mồ côi; chuẩn hoá ID bù phép LEAVE_${empId}_${date}",
+        "Task 2.1: Sửa tận gốc lỗi KPI Vi Phạm Đi Trễ / Về Sớm / Quên Quẹt trên Dashboard luôn hiển thị 0 bằng helper isAttendanceRecord và chu kỳ động",
+        "Task 2.2: Đồng bộ hệ số % NS và % CL chuyền vào tính thưởng năng suất Nhóm 2 trên cả TimesheetCalendarPage và Excel Exporter (excel-exporter.ts)",
+        "Task 2.3: Modal sửa ô công kiểm tra và gán lại cờ vi phạm isViolation / isViolationFlag chuẩn xác theo mã công mới",
+        "Task 2.4: Sắp ca hàng loạt (ShiftAssignmentPage) kiểm tra vi phạm 12h nghỉ xuyên suốt cả bộ nhớ toSave và shiftRosters, hỗ trợ cả Giờ hành chính",
+        "Task 2.5: Ca hôm trước hiển thị động trên ShiftRosterPage, otSummary tính toán theo phạm vi kỳ công & bộ phận thực tế, từ chối bù phép tự động ghi nhận Off trong dailyTimesheets",
+        "Subagent QC: 118/118 tests vitest passed 100%, tsc --noEmit sạch lỗi, ghi nhận KB-007, KB-008, KB-009 vào learning.md"
+      ]
+    },
+    "M16_Opencode_Audit_Remediation_2026_09_09": {
+      "status": "COMPLETED",
+      "completion_pct": 100,
+      "features": [
+        "Task 1 (P0): Chống mất dữ liệu khi Import tại Header.tsx (bỏ premature clear ở 40%, bọc toàn bộ clear và bulkPut vào 1 transaction ACID Dexie duy nhất ở 90%, tự động rollback nếu lỗi). Sửa lỗi tháng xuất Excel đọc từ localStorage thay vì hardcode new Date().",
+        "Task 2 (P0): Phân quyền Menu RBAC tại Sidebar.tsx (F6) ẩn các mục không được phân quyền. Bổ sung kiểm tra quyền MANAGE_EMPLOYEES khi sửa thông tin nhân viên tại EmployeeListPage và MANAGE_EMPLOYEES/MANAGE_TIMESHEET tại ProductivityQualityPage.",
+        "Task 3 (P1): Mở khoá luồng quản lý cho Trưởng bộ phận: canManageRoster (MANAGE_ROSTER || MANAGE_DEPT_ROSTER) tại ShiftRosterPage, canManageOt (MANAGE_OT || PROPOSE_DEPT_OT) tại OvertimePage, canCommit (SCAN_OCR || SCAN_DEPT_OCR) tại OCRVerificationPage.",
+        "Task 4 (P1): Sửa hàm parseDateLoose hỗ trợ định dạng ISO timestamps (có T), YYYY-MM-DD và DD/MM/YYYY; đồng bộ hóa logic kiểm tra thử việc isProbation giữa Main Thread (formula-engine.ts) và Web Worker (formula-engine.worker.ts) cho thưởng năng suất Nhóm 2.",
+        "Task 5 (P1): Chuẩn hoá luồng OCR theo nghiệp vụ đã thống nhất (B31): OCR tập trung nhận diện MSNV, Ngày tăng ca, và Giờ tăng ca; Tên nhân viên và Bộ phận tự động tra cứu từ danh mục Master (db.employees). Loại bỏ các phép thay thế ký tự đơn lẻ toàn cục ('O'->'0', 'l'->'1', 'S'->'5') khỏi hr-rag-postprocessor.ts để bảo vệ họ tên tiếng Việt.",
+        "Task 6 (P1): Bọc transaction nguyên tử cho toàn bộ thao tác nạp dữ liệu ban đầu seedDatabaseIfEmpty trong db-seeder.ts.",
+        "Subagent QC: 118/118 tests vitest passed 100%, tsc --noEmit sạch lỗi 0 warning, ghi nhận KB-010 đến KB-013 vào learning.md."
       ]
     }
   }

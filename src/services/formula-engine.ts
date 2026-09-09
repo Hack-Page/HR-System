@@ -1,5 +1,6 @@
 import { IEmployee, IDailyTimesheetCell } from '../types';
 import { FORMULA_DEFS, buildCountBag } from './formula-defs';
+import { parseDateLoose } from './pay-period';
 
 export interface ITimesheetSummary {
   standardWD: number;
@@ -183,10 +184,9 @@ export function computeEmployeeTimesheetSummary(
     // Thử việc không nhận tiền năng suất
     const isProbation = (() => {
       if (employee.probationEndDate) {
-        const parts = employee.probationEndDate.split('/');
-        if (parts.length === 3) {
-          const [d, m, y] = parts.map(Number);
-          const probEnd = new Date(y, m - 1, d, 23, 59, 59);
+        const probEnd = parseDateLoose(employee.probationEndDate);
+        if (probEnd) {
+          probEnd.setHours(23, 59, 59, 999);
           return new Date() <= probEnd;
         }
       }

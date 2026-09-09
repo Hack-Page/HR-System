@@ -37,10 +37,6 @@ export const HR_RAG_CONTEXT = {
     'LEPO29': 'LEP029', 'LEPO31': 'LEP031', 'LEPO36': 'LEP036',
     'LEPO4O': 'LEP040',
     
-    // Số bị nhầm với chữ
-    'O': '0', 'l': '1', 'I': '1', 'S': '5', 'Z': '2',
-    'o': '0', 's': '5', 'z': '2',
-    
     // Ca làm việc
     'HCl': 'HC1', 'HCi': 'HC1', 'HC2': 'HC2',
     'V ': 'V', ' V': 'V',

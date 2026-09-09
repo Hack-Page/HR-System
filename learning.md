@@ -9,6 +9,16 @@ Sổ tay ghi nhận toàn bộ các lỗi phát sinh trong quá trình phát tri
 - [KB-001: Lỗi tràn chữ / rớt dòng badge trên màn hình laptop (13-15.6 inch)](#kb-001-lỗi-tràn-chữ--rớt-dòng-badge-trên-màn-hình-laptop-13-156-inch)
 - [KB-002: Lỗi IndexedDB không cho phép Boolean làm Index Key](#kb-002-lỗi-indexeddb-không-cho-phép-boolean-làm-index-key)
 - [KB-003: Dexie.js upgrade() không chạy trên Fresh Database Install](#kb-003-dexiejs-upgrade-không-chạy-trên-fresh-database-install)
+- [KB-004: Giá trị số 0 bị coi là truthy trong Nullish Coalescing (??) khi tính phụ cấp](#kb-004-giá-trị-số-0-bị-coi-là-truthy-trong-nullish-coalescing--khi-tính-phụ-cấp)
+- [KB-005: Tách riêng Off và UL: Cần cập nhật cả test suite cũ (timesheet-rules.test.ts)](#kb-005-tách-riêng-off-và-ul-cần-cập-nhật-cả-test-suite-cũ-timesheet-rulestestts)
+- [KB-006: Thiếu polyfill fake-indexeddb/auto khi chạy file unit test Dexie độc lập](#kb-006-thiếu-polyfill-fake-indexeddbauto-khi-chạy-file-unit-test-dexie-độc-lập)
+- [KB-007: Dashboard KPI vi phạm chuyên cần luôn bằng 0 do lọc nhầm mã công (`code === 'W' || code === 'N'`)](#kb-007-dashboard-kpi-vi-phạm-chuyên-cần-luôn-bằng-0-do-lọc-nhầm-mã-công-code--w--code--n)
+- [KB-008: Truy vấn kỳ công 21-20 (Split Month) bỏ sót các ngày của tháng trước nếu chỉ query theo `selectedMonth`](#kb-008-truy-vấn-kỳ-công-21-20-split-month-bỏ-sót-các-ngày-của-tháng-trước-nếu-chỉ-query-theo-selectedmonth)
+- [KB-009: Thiếu store mới trong OneDrive Snapshot Sync v3.1](#kb-009-thiếu-store-mới-trong-onedrive-snapshot-sync-v31)
+- [KB-010: Mất dữ liệu khi Import do xóa dữ liệu quá sớm trước khi import hoàn tất (Premature Clear Anti-pattern)](#kb-010-mất-dữ-liệu-khi-import-do-xóa-dữ-liệu-quá-sớm-trước-khi-import-hoàn-tất-premature-clear-anti-pattern)
+- [KB-011: Lỗi phân quyền menu RBAC (F6) và quyền sửa dữ liệu của Trưởng bộ phận](#kb-011-lỗi-phân-quyền-menu-rbac-f6-và-quyền-sửa-dữ-liệu-của-trưởng-bộ-phận)
+- [KB-012: Lỗi tính thử việc bị lệch do định dạng ngày ISO YYYY-MM-DD (B11)](#kb-012-lỗi-tính-thử-việc-bị-lệch-do-định-dạng-ngày-iso-yyyy-mm-dd-b11)
+- [KB-013: OCR chỉ cần MSNV, Ngày, Giờ — Tránh biến đổi ký tự tự do làm hỏng tên tiếng Việt (B31)](#kb-013-ocr-chỉ-cần-msnv-ngày-giờ--tránh-biến-đổi-ký-tự-tự-do-làm-hỏng-tên-tiếng-việt-b31)
 
 ---
 
@@ -58,10 +68,6 @@ Sổ tay ghi nhận toàn bộ các lỗi phát sinh trong quá trình phát tri
 - **Bài học kinh nghiệm (Key Takeaway)**:
   - Bất cứ khi nào tạo store mới cần seed mặc định, phải bổ sung cả trong `.upgrade()` và `seedDatabaseIfEmpty()`.
 
-- [KB-004: Giá trị số 0 bị coi là truthy trong Nullish Coalescing (??) khi tính phụ cấp](#kb-004-giá-trị-số-0-bị-coi-là-truthy-trong-nullish-coalescing--khi-tính-phụ-cấp)
-- [KB-005: Tách riêng Off và UL: Cần cập nhật cả test suite cũ (timesheet-rules.test.ts)](#kb-005-tách-riêng-off-và-ul-cần-cập-nhật-cả-test-suite-cũ-timesheet-rulestestts)
-- [KB-006: Thiếu polyfill fake-indexeddb/auto khi chạy file unit test Dexie độc lập](#kb-006-thiếu-polyfill-fake-indexeddbauto-khi-chạy-file-unit-test-dexie-độc-lập)
-
 ---
 
 ### KB-004: Giá trị số 0 bị coi là truthy trong Nullish Coalescing (??) khi tính phụ cấp
@@ -102,3 +108,111 @@ Sổ tay ghi nhận toàn bộ các lỗi phát sinh trong quá trình phát tri
   - Bổ sung kiểm tra `if (!db.isOpen()) await db.open();` trong `beforeEach`.
 - **Bài học kinh nghiệm (Key Takeaway)**:
   - Mọi test file liên quan đến Dexie BẮT BUỘC phải import `fake-indexeddb/auto` và luôn test thử bằng lệnh chạy đơn lẻ `npx vitest run <test-file>` trước khi bàn giao cho Subagent QC.
+
+---
+
+### KB-007: Dashboard KPI vi phạm chuyên cần luôn bằng 0 do lọc nhầm mã công (`code === 'W' || code === 'N'`)
+- **Ngày ghi nhận**: 2026-09-09
+- **Vị trí**: `src/pages/DashboardPage.tsx`
+- **Triệu chứng (Symptom)**: 
+  - Thống kê trên Dashboard tại KPI Card 2 luôn hiển thị: `0 Đi trễ`, `0 Về sớm`, `0 Quên quẹt vào`, `0 Quên quẹt ra` dù bảng chấm công có nhiều bản ghi trễ và quên quẹt thẻ.
+- **Nguyên nhân gốc rễ (Root Cause)**:
+  - Vòng lặp tính toán kiểm tra điều kiện `if (code !== 'W' && code !== 'N') return;` với giả định ngày công chỉ là W hoặc N. Tuy nhiên, khi nhân viên đi trễ (2'-60') hoặc về sớm, mã trạng thái công là `LA` (Late Arrival) hoặc `ED` (Early Departure); khi quên quẹt thẻ là `MCO` hoặc `MCI`. Do đó, toàn bộ các vi phạm này bị lọc bỏ ngay tại đầu vòng lặp.
+- **Giải pháp xử lý (Resolution)**:
+  - Định nghĩa helper `isAttendanceRecord`: chấp nhận các mã `['W', 'N', 'LA', 'ED', 'MCO', 'MCI', 'Off', 'OFF']` hoặc `code.startsWith('W')`.
+  - Đồng thời tách kiểm tra vi phạm theo cả mã trạng thái và số phút / quẹt thực tế: `code === 'LA' || (lateMinutes > 0 && lateMinutes < 60)`.
+- **Bài học kinh nghiệm (Key Takeaway)**:
+  - Không bao giờ giả định một cell chấm công có vi phạm sẽ giữ nguyên mã chuẩn `W`. Mọi hàm lọc tập hợp ngày công phải kiểm tra bao quát toàn bộ danh mục mã công hiện diện (`isAttendanceRecord`).
+
+---
+
+### KB-008: Truy vấn kỳ công 21-20 (Split Month) bỏ sót các ngày của tháng trước nếu chỉ query theo `selectedMonth`
+- **Ngày ghi nhận**: 2026-09-09
+- **Vị trí**: `src/pages/ProductivityQualityPage.tsx`, `src/services/excel-exporter.ts`
+- **Triệu chứng (Symptom)**: 
+  - Trong kỳ công Chính thức (21 tháng N-1 đến 20 tháng N), tỷ lệ năng suất và chất lượng các ngày 21 đến 31 của tháng trước bị biến mất hoặc không nạp được vào bảng chấm công và file Excel.
+- **Nguyên nhân gốc rễ (Root Cause)**:
+  - Dexie query chỉ lọc `where('month').equals(selectedMonth)`. Trong kỳ công 21-20, 11 ngày đầu tiên thuộc tháng N-1 nên có `month === selectedMonth - 1`, dẫn tới bị loại khỏi kết quả query.
+- **Giải pháp xử lý (Resolution)**:
+  - Khi `cycleMode === 'OFFICIAL'`, nạp đồng thời bản ghi của cả 2 tháng: `month = selectedMonth` và `month = prevMonth`, sau đó lọc bằng tập hợp ngày chính xác (`calendarDays`).
+- **Bài học kinh nghiệm (Key Takeaway)**:
+  - Khi làm việc với kỳ công vắt qua 2 tháng (21-20), mọi truy vấn IndexedDB theo tháng lịch BẮT BUỘC phải lấy cả 2 tháng tương ứng.
+
+---
+
+### KB-009: Thiếu store mới trong OneDrive Snapshot Sync v3.1
+- **Ngày ghi nhận**: 2026-09-09
+- **Vị trí**: `src/services/db-sync.ts`
+- **Triệu chứng (Symptom)**: 
+  - Khi người dùng xuất Snapshot ra file JSON để đồng bộ sang máy khác hoặc sao lưu OneDrive, hai bảng mới `productionLines` và `productivityQualityRates` không được xuất ra. Khi import vào máy mới, cấu hình chuyền sản xuất và tỷ lệ năng suất bị mất.
+- **Nguyên nhân gốc rễ (Root Cause)**:
+  - Interface `IDatabaseSnapshot` và các hàm `exportDatabaseToSnapshot`, `validateSnapshot`, `importDatabaseFromSnapshot` chưa được cập nhật khi schema Dexie nâng cấp thêm store mới.
+- **Giải pháp xử lý (Resolution)**:
+  - Bổ sung `productionLines` và `productivityQualityRates` vào `IDatabaseSnapshot` (version bump lên `3.1`).
+  - Đảm bảo cơ chế backward-compatible: nếu snapshot cũ v3.0 thiếu 2 trường này thì fallback mảng rỗng `[]` và tự động seed chuyền mặc định.
+- **Bài học kinh nghiệm (Key Takeaway)**:
+  - Bất cứ khi nào thêm store mới vào IndexedDB theo kiến trúc Local-First, BẮT BUỘC phải cập nhật ngay module Backup/Restore (`db-sync.ts`).
+
+---
+
+### KB-010: Mất dữ liệu khi Import do xóa dữ liệu quá sớm trước khi import hoàn tất (Premature Clear Anti-pattern)
+- **Ngày ghi nhận**: 2026-09-09
+- **Vị trí**: `src/components/layout/Header.tsx`
+- **Triệu chứng (Symptom)**: 
+  - Trong quá trình nạp tệp Excel chấm công / quẹt thẻ / tăng ca, nếu file Excel bị lỗi định dạng hoặc trình duyệt gặp sự cố tại bước 3 (40%), toàn bộ dữ liệu lịch sử quẹt thẻ và chấm công đã bị mất sạch do hàm `clear()` được gọi quá sớm trước khi parse xong.
+- **Nguyên nhân gốc rễ (Root Cause)**:
+  - Gọi `db.dailyTimesheets.clear()`, `db.overtimeRecords.clear()`, v.v. tại bước 3, phân tán độc lập với lệnh `bulkPut()` ở bước 6. Thao tác không nằm trong một transaction nguyên tử (atomic transaction).
+- **Giải pháp xử lý (Resolution)**:
+  - Bỏ hoàn toàn các lệnh `clear()` tại bước 3.
+  - Gom toàn bộ thao tác xoá và ghi đè vào 1 transaction duy nhất: `await db.transaction('rw', [db.dailyTimesheets, db.overtimeRecords, db.rawAttendanceLogs, db.leaveRequests, db.shiftRosters], async () => { ... })` ở bước 6 (90%).
+  - Nếu có bất kỳ ngoại lệ nào xảy ra trong quá trình xử lý, toàn bộ transaction tự động rollback 100%, bảo vệ dữ liệu cũ nguyên vẹn.
+- **Bài học kinh nghiệm (Key Takeaway)**:
+  - Trong hệ thống Local-First, KHÔNG BAO GIỜ xóa dữ liệu cũ khi dữ liệu mới chưa được parse và xác thực thành công. Luôn bọc `clear()` và `bulkPut()` trong cùng một Dexie transaction nguyên tử.
+
+---
+
+### KB-011: Lỗi phân quyền menu RBAC (F6) và quyền sửa dữ liệu của Trưởng bộ phận
+- **Ngày ghi nhận**: 2026-09-09
+- **Vị trí**: `src/components/layout/Sidebar.tsx`, `src/pages/EmployeeListPage.tsx`, `src/pages/ProductivityQualityPage.tsx`, `src/pages/ShiftRosterPage.tsx`, `src/pages/OvertimePage.tsx`, `src/pages/OCRVerificationPage.tsx`
+- **Triệu chứng (Symptom)**:
+  - Theo phản ánh nghiệp vụ F6, user không có quyền vẫn nhìn thấy menu Danh sách nhân viên trong thanh điều hướng và có thể sửa thông tin nhân viên. Ngược lại, các vai trò Quản lý bộ phận (Warehouse Lead, Production Supervisor, QC Inspector) có quyền cấp bộ phận (`PROPOSE_DEPT_OT`, `MANAGE_DEPT_ROSTER`, `SCAN_DEPT_OCR`, `VIEW_DEPT_EMPLOYEES`) lại bị chặn khi thực hiện các thao tác sửa đổi trong phạm vi bộ phận.
+- **Nguyên nhân gốc rễ (Root Cause)**:
+  - `Sidebar.tsx` render trực tiếp danh sách menu mà không kiểm tra quyền `hasPermission()`. Các trang chi tiết chỉ kiểm tra quyền toàn quyền (`MANAGE_OT`, `MANAGE_ROSTER`, `SCAN_OCR`) mà bỏ sót các quyền bộ phận tương ứng.
+- **Giải pháp xử lý (Resolution)**:
+  - Bọc tất cả các menu trong `Sidebar.tsx` với điều kiện `hasPermission()`.
+  - Phân quyền ẩn hiện nút sửa/xóa tại `EmployeeListPage` (`hasPermission('MANAGE_EMPLOYEES')`) và `ProductivityQualityPage` (`canManage`).
+  - Hỗ trợ đầy đủ quyền bộ phận: `canManageRoster = hasPermission('MANAGE_ROSTER') || hasPermission('MANAGE_DEPT_ROSTER')`, `canManageOt = hasPermission('MANAGE_OT') || hasPermission('PROPOSE_DEPT_OT')`, `canCommit = hasPermission('SCAN_OCR') || hasPermission('SCAN_DEPT_OCR')`.
+- **Bài học kinh nghiệm (Key Takeaway)**:
+  - Luôn đảm bảo nguyên tắc kép: RBAC cấp Menu (UI Visibility) + RBAC cấp Hành động (Action Guard) phải khớp nhau và hỗ trợ cả quyền Global lẫn Department Scope.
+
+---
+
+### KB-012: Lỗi tính thử việc bị lệch do định dạng ngày ISO YYYY-MM-DD (B11)
+- **Ngày ghi nhận**: 2026-09-09
+- **Vị trí**: `src/services/formula-engine.ts`, `src/workers/formula-engine.worker.ts`, `src/services/pay-period.ts`
+- **Triệu chứng (Symptom)**:
+  - Nhân viên đang trong thời gian thử việc nhưng vẫn được nhận thưởng năng suất Nhóm 2 nếu trường ngày thử việc `probationEndDate` được lưu theo định dạng `YYYY-MM-DD` (hoặc ISO string) từ trình duyệt. Ngoài ra, tính toán trong Web Worker chạy ngầm không kiểm tra ngày thử việc.
+- **Nguyên nhân gốc rễ (Root Cause)**:
+  - Hàm tính thử việc dùng `probationEndDate.split('/')`, chỉ parse được `DD/MM/YYYY`. Khi chuỗi có dạng `YYYY-MM-DD`, `split('/')` trả về mảng 1 phần tử dẫn đến `isProbation` luôn là `false`. Web worker hoàn toàn thiếu logic kiểm tra thử việc cho Nhóm 2.
+- **Giải pháp xử lý (Resolution)**:
+  - Nâng cấp `parseDateLoose` hỗ trợ cả `DD/MM/YYYY`, `YYYY-MM-DD`, và ISO string có timestamp `T`.
+  - Dùng `parseDateLoose` trong `formula-engine.ts` và đồng bộ logic kiểm tra thử việc vào `formula-engine.worker.ts`.
+- **Bài học kinh nghiệm (Key Takeaway)**:
+  - Khi xử lý dữ liệu ngày tháng từ người dùng hoặc hệ thống, không bao giờ giả định một định dạng chuỗi duy nhất. Mọi hàm engine tính toán và Worker phải đồng bộ 100% logic nghiệp vụ.
+
+---
+
+### KB-013: OCR chỉ cần MSNV, Ngày, Giờ — Tránh biến đổi ký tự tự do làm hỏng tên tiếng Việt (B31)
+- **Ngày ghi nhận**: 2026-09-09
+- **Vị trí**: `src/services/hr-rag-postprocessor.ts`, `src/pages/OCRVerificationPage.tsx`
+- **Triệu chứng (Symptom)**:
+  - Khi nhận diện phiếu tăng ca OCR, họ tên tiếng Việt của nhân viên bị méo mó, biến thành số (ví dụ: "Long" thành "10ng", "Sơn" thành "5ơn").
+- **Nguyên nhân gốc rễ (Root Cause)**:
+  - Từ điển `HR_RAG_CONTEXT.corrections` chứa các phép thay thế ký tự đơn lẻ ('O'->'0', 'l'->'1', 'S'->'5', 's'->'5', 'o'->'0', 'z'->'2') và áp dụng toàn cục trên toàn bộ văn bản của ô dữ liệu.
+- **Giải pháp xử lý (Resolution)**:
+  - Xóa bỏ các quy tắc thay thế ký tự đơn lẻ toàn cục khỏi từ điển corrections. Giữ các quy tắc trích xuất số chuyên biệt trong `extractCanonicalHRKey` chỉ áp dụng riêng cho tiền tố/hậu tố mã nhân viên.
+  - Thực hiện đúng nghiệp vụ đã làm rõ: OCR chỉ tập trung bóc tách chuẩn 3 thông tin: **Mã nhân viên (MSNV)**, **Ngày tăng ca**, và **Số giờ tăng ca**.
+  - Tự động tra cứu Họ tên nhân viên và Bộ phận từ danh mục nhân sự Master (`db.employees`) thông qua MSNV đã chuẩn hóa.
+- **Bài học kinh nghiệm (Key Takeaway)**:
+  - Không OCR những thông tin đã có sẵn và chuẩn xác trong cơ sở dữ liệu Master. Tận dụng Master Data Lookup bằng khóa chính để đạt độ chính xác 100% cho các trường định danh.
+

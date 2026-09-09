@@ -27,7 +27,7 @@ import { daysUntil as calcDaysUntil } from '../../services/pay-period';
 import { PresenceBar } from './PresenceBar';
 
 export const Header: React.FC = () => {
-  const { session, currentRole, hasPermission, logout, refreshPermissions } = useAuth();
+  const { session, currentRole, hasPermission, logout, refreshPermissions, departmentScope } = useAuth();
   const { language, toggleLanguage, t } = useLanguage();
   const { success, error, warning, info } = useToast();
   const { alertModal, confirm } = useModal();
@@ -114,12 +114,7 @@ export const Header: React.FC = () => {
           setImportStatusText(msg.message);
         } else if (msg.type === 'COMPLETE') {
           setImportProgress(40);
-          setImportStatusText('[3/6] Nhận diện kỳ công & làm sạch bảng công cũ...');
-
-          // Phương án 1 (chọn theo yêu cầu user): Tự động xóa sạch bảng chấm công & tăng ca cũ trước khi nạp mới
-          await db.dailyTimesheets.clear();
-          await db.overtimeRecords.clear();
-          await db.rawAttendanceLogs.clear();
+          setImportStatusText('[3/6] Nhận diện kỳ công & chuẩn bị dữ liệu...');
 
           // Nhận diện kỳ công
           const detectedMonth = msg.detectedPeriod?.month || importMonth;
@@ -592,12 +587,6 @@ export const Header: React.FC = () => {
               }
             }
 
-            if (leaveRequestsToCreate.length > 0) {
-              await db.leaveRequests.bulkPut(leaveRequestsToCreate);
-            }
-            if (restViolationsToCreate.length > 0) {
-              await db.shiftRosters.bulkPut(restViolationsToCreate);
-            }
           } catch (postErr: any) {
             console.error('Post-process timesheet error:', postErr);
             warning('Lưu ý xử lý hậu kỳ', postErr.message || 'Lỗi khi đối chiếu ca/phép, vẫn tiến hành lưu dữ liệu.');
@@ -610,15 +599,31 @@ export const Header: React.FC = () => {
           setImportProgress(90);
           setImportStatusText('[6/6] Ghi vào cơ sở dữ liệu Dexie.js (IndexedDB)...');
 
-          if (postTimesheets.length > 0) {
-            await db.dailyTimesheets.bulkPut(postTimesheets);
-          }
-          if (overtimesToCreate.length > 0) {
-            await db.overtimeRecords.bulkPut(overtimesToCreate);
-          }
-          if (postRawLogs.length > 0) {
-            await db.rawAttendanceLogs.bulkAdd(postRawLogs);
-          }
+          // Thực hiện làm sạch và ghi mới trong MỘT Transaction nguyên tử (ACID)
+          // Đảm bảo không bao giờ bị mất dữ liệu cũ nếu gặp lỗi giữa chừng
+          await db.transaction('rw', [db.dailyTimesheets, db.overtimeRecords, db.rawAttendanceLogs, db.leaveRequests, db.shiftRosters], async () => {
+            await db.dailyTimesheets.clear();
+            await db.overtimeRecords.clear();
+            await db.rawAttendanceLogs.clear();
+            await db.leaveRequests.clear();
+            await db.shiftRosters.clear();
+
+            if (postTimesheets.length > 0) {
+              await db.dailyTimesheets.bulkPut(postTimesheets);
+            }
+            if (overtimesToCreate.length > 0) {
+              await db.overtimeRecords.bulkPut(overtimesToCreate);
+            }
+            if (postRawLogs.length > 0) {
+              await db.rawAttendanceLogs.bulkAdd(postRawLogs);
+            }
+            if (leaveRequestsToCreate.length > 0) {
+              await db.leaveRequests.bulkPut(leaveRequestsToCreate);
+            }
+            if (restViolationsToCreate.length > 0) {
+              await db.shiftRosters.bulkPut(restViolationsToCreate);
+            }
+          });
 
           setImportProgress(100);
           setIsImporting(false);
@@ -658,14 +663,19 @@ export const Header: React.FC = () => {
       const timesheets = await db.dailyTimesheets.toArray();
       const overtimes = await db.overtimeRecords.toArray();
 
-      if (emps.length === 0) {
+      const savedMonth = localStorage.getItem('smarthr_selected_month');
+      const savedYear = localStorage.getItem('smarthr_selected_year');
+      const now = new Date();
+      const curMonth = savedMonth ? parseInt(savedMonth, 10) : (now.getMonth() + 1);
+      const curYear = savedYear ? parseInt(savedYear, 10) : now.getFullYear();
+
+      const exportEmps = departmentScope ? emps.filter(e => e.department === departmentScope) : emps;
+
+      if (exportEmps.length === 0) {
         warning('Chưa có dữ liệu nhân viên để xuất tệp.');
         return;
       }
 
-      const now = new Date();
-      const curMonth = now.getMonth() + 1;
-      const curYear = now.getFullYear();
       // Lấy settings hiện tại để truyền vào exporter (công thức custom)
       let settings: any = undefined;
       try {
@@ -674,8 +684,8 @@ export const Header: React.FC = () => {
         const dex = await db.settings.get('systemSettings');
         if (dex?.value) settings = dex.value;
       } catch {}
-      await exportTimesheetToExcel(emps, timesheets, overtimes, curMonth, curYear, 'ALL', settings);
-      success('Xuất file Excel thành công!', `Đã xuất ${emps.length} NV kỳ ${curMonth}/${curYear} (Chính thức 21-20 + Thời vụ 1-31, 2 sheet nếu có đủ nhóm).`);
+      await exportTimesheetToExcel(exportEmps, timesheets, overtimes, curMonth, curYear, 'ALL', settings);
+      success('Xuất file Excel thành công!', `Đã xuất ${exportEmps.length} NV kỳ ${curMonth}/${curYear} (Chính thức 21-20 + Thời vụ 1-31, 2 sheet nếu có đủ nhóm).`);
     } catch (err: any) {
       error('Lỗi xuất Excel', err.message);
     }
@@ -686,7 +696,7 @@ export const Header: React.FC = () => {
       {/* Left: Logo + Chuông thông báo hợp đồng */}
       <div className="flex items-center gap-4 flex-1 max-w-lg">
         <img
-          src="/Leggett.jpg"
+          src="./Leggett.jpg"
           alt="Leggett & Platt HOME FURNITURE"
           className="h-9 w-auto object-contain max-w-[260px]"
           loading="eager"

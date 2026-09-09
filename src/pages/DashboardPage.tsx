@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { 
   Users, 
   UserCheck, 
@@ -33,7 +33,7 @@ import { db } from '../db';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { NavPageId } from '../components/layout/Sidebar';
-import { getPayPeriod, getCurrentPayPeriod, isInPayPeriod, formatPayPeriodLabel, parseDateLoose } from '../services/pay-period';
+import { getPayPeriod, isInPayPeriod, formatPayPeriodLabel, parseDateLoose } from '../services/pay-period';
 
 interface DashboardPageProps {
   onNavigate: (page: NavPageId) => void;
@@ -50,15 +50,31 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
   const overtimes = useLiveQuery(() => db.overtimeRecords.toArray(), []) || [];
   const leaveRequests = useLiveQuery(() => db.leaveRequests.toArray(), []) || [];
 
+  const [targetMonth, setTargetMonth] = useState<number>(() => {
+    const saved = localStorage.getItem('smarthr_selected_month');
+    return saved ? parseInt(saved, 10) : 8;
+  });
+  const [targetYear, setTargetYear] = useState<number>(() => {
+    const saved = localStorage.getItem('smarthr_selected_year');
+    return saved ? parseInt(saved, 10) : 2026;
+  });
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      if (e.detail?.month) setTargetMonth(e.detail.month);
+      if (e.detail?.year) setTargetYear(e.detail.year);
+    };
+    window.addEventListener('timesheet:period_changed', handler);
+    return () => window.removeEventListener('timesheet:period_changed', handler);
+  }, []);
+
   const now = new Date();
-  // Kỳ công chuẩn: OFFICIAL 21-20, SEASONAL 01-31
-  const officialPay = getCurrentPayPeriod(now, 'OFFICIAL');
-  const seasonalPay = getCurrentPayPeriod(now, 'SEASONAL');
-  // Mặc định kỳ hiển thị chính là OFFICIAL (21-20)
-  const currentMonth = officialPay.payMonth;
-  const currentYear = officialPay.payYear;
-  const officialPayLabel = formatPayPeriodLabel(officialPay.payMonth, officialPay.payYear, 'OFFICIAL');
-  const seasonalPayLabel = formatPayPeriodLabel(seasonalPay.payMonth, seasonalPay.payYear, 'SEASONAL');
+  const officialPay = { payMonth: targetMonth, payYear: targetYear };
+  const seasonalPay = { payMonth: targetMonth, payYear: targetYear };
+  const currentMonth = targetMonth;
+  const currentYear = targetYear;
+  const officialPayLabel = formatPayPeriodLabel(targetMonth, targetYear, 'OFFICIAL');
+  const seasonalPayLabel = formatPayPeriodLabel(targetMonth, targetYear, 'SEASONAL');
 
   // Helper parse DD/MM/YYYY or YYYY-MM-DD (dùng parseDateLoose chung)
   const parseDate = parseDateLoose;
@@ -101,7 +117,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       if (!emp?.probationEndDate) return false;
       const d = parseDate(emp.probationEndDate);
       if (!d) return false;
-      return ref > new Date(ref.getFullYear(), ref.getMonth(), ref.getDate()) && ref < d ? true : ref < d;
+      return ref < d;
     };
     const overtimeThisMonth = overtimes.filter(o => {
       const emp = employees.find(e => e.employeeId === o.employeeId);
@@ -112,32 +128,39 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
     });
     const totalOvertimeHoursThisMonth = overtimeThisMonth.reduce((sum, o) => sum + (o.hours || 0), 0);
 
-    // KPI 7 & 8: cần lọc theo kỳ công hiện tại và ngày làm việc (W/N), ngưỡng 60p
-    let totalLateCount = 0; // 0 < late <=60
-    let totalEarlyCount = 0; // 0 < early <=60
-    let totalMissingIn = 0; // có checkOut nhưng không có checkIn, và status là ngày làm việc
-    let totalMissingOut = 0; // có checkIn nhưng không có checkOut
+    // KPI 7 & 8: đếm chính xác đi trễ, về sớm, thiếu quẹt thẻ trong kỳ công
+    let totalLateCount = 0;
+    let totalEarlyCount = 0;
+    let totalMissingIn = 0;
+    let totalMissingOut = 0;
     let totalWorkdaySlots = 0;
 
-    const isWorkingDay = (code?: string) => code === 'W' || code === 'N';
+    const isAttendanceRecord = (code?: string) => {
+      const c = (code || '').trim();
+      return ['W', 'N', 'LA', 'ED', 'MCO', 'MCI', 'Off', 'OFF'].includes(c) || c.startsWith('W');
+    };
 
     timesheets.forEach(ts => {
-      if (!isWorkingDay(ts.statusCode)) return;
+      const code = (ts.statusCode || '').trim();
+      if (!isAttendanceRecord(code)) return;
       const emp = employees.find(e => e.employeeId === ts.employeeId);
       const ct = emp?.contractType || 'OFFICIAL';
       const cur = ct === 'SEASONAL' ? seasonalPay : officialPay;
       if (!isInPayPeriod(ts.date, ct, cur.payMonth, cur.payYear)) return;
       totalWorkdaySlots++;
-      if (ts.lateMinutes && ts.lateMinutes > 0 && ts.lateMinutes <= 60) {
+
+      if (code === 'LA' || (ts.lateMinutes && ts.lateMinutes > 0 && ts.lateMinutes < 60)) {
         totalLateCount++;
       }
-      if (ts.earlyMinutes && ts.earlyMinutes > 0 && ts.earlyMinutes <= 60) {
+      if (code === 'ED' || (ts.earlyMinutes && ts.earlyMinutes > 0 && ts.earlyMinutes < 60)) {
         totalEarlyCount++;
       }
-      const hasIn = !!ts.checkIn;
-      const hasOut = !!ts.checkOut;
-      if (!hasIn && hasOut) totalMissingIn++;
-      if (hasIn && !hasOut) totalMissingOut++;
+      if (code === 'MCI' || (!ts.checkIn && ts.checkOut)) {
+        totalMissingIn++;
+      }
+      if (code === 'MCO' || (ts.checkIn && !ts.checkOut)) {
+        totalMissingOut++;
+      }
     });
 
     const totalLateEarly = totalLateCount + totalEarlyCount;
@@ -152,11 +175,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       if (e.contractType === 'OFFICIAL') deptMap[dept].official++;
       else deptMap[dept].seasonal++;
     });
-    if (Object.keys(deptMap).length === 0) {
-      deptMap['Production'] = { total: 54, official: 40, seasonal: 14 };
-      deptMap['Warehouse'] = { total: 22, official: 18, seasonal: 4 };
-      deptMap['QC'] = { total: 14, official: 12, seasonal: 2 };
-    }
 
     const departmentChartData = Object.keys(deptMap).map(k => ({
       name: k,
@@ -213,7 +231,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
       const ct = (emp?.contractType || 'OFFICIAL') as 'OFFICIAL' | 'SEASONAL';
       const cur = ct === 'SEASONAL' ? seasonalPay : officialPay;
       if (!isInPayPeriod(ts.date, ct, cur.payMonth, cur.payYear)) return;
-      if (!isWorkingDay(ts.statusCode)) return;
+      if (!isAttendanceRecord(ts.statusCode)) return;
       if (ts.lateMinutes && ts.lateMinutes > 0 && ts.lateMinutes <= 60) addViol(ts.employeeId, 1);
       if (ts.earlyMinutes && ts.earlyMinutes > 0 && ts.earlyMinutes <= 60) addViol(ts.employeeId, 1);
       const hasIn = !!ts.checkIn;

@@ -55,10 +55,12 @@ export const ShiftRosterPage: React.FC = () => {
     return shiftRosters.filter(s => s.isRestViolation).length;
   }, [shiftRosters]);
 
-  // Adjust shift action to fix violation (yêu cầu quyền MANAGE_ROSTER)
+  const canManageRoster = hasPermission('MANAGE_ROSTER') || hasPermission('MANAGE_DEPT_ROSTER');
+
+  // Adjust shift action to fix violation (yêu cầu quyền MANAGE_ROSTER hoặc MANAGE_DEPT_ROSTER)
   const handleFixViolation = async (roster: IShiftRosterEntry, newShift: ShiftClassType) => {
-    if (!hasPermission('MANAGE_ROSTER')) {
-      error('Không đủ quyền', 'Bạn không có quyền điều chỉnh phân ca (MANAGE_ROSTER).');
+    if (!canManageRoster) {
+      error('Không đủ quyền', 'Bạn không có quyền điều chỉnh phân ca (MANAGE_ROSTER hoặc MANAGE_DEPT_ROSTER).');
       return;
     }
     let startTime = '06:00';
@@ -199,9 +201,25 @@ export const ShiftRosterPage: React.FC = () => {
                       {roster.date}
                     </td>
                     <td className="py-3 px-4 text-center">
-                      <span className="px-2 py-0.5 rounded-md bg-pink-50 text-pink-700 font-bold border border-pink-200">
-                        Ca 2 (14h - 22h)
-                      </span>
+                      {roster.previousShiftEndTime === '22:00' ? (
+                        <span className="px-2 py-0.5 rounded-md bg-pink-50 text-pink-700 font-bold border border-pink-200 text-xs">
+                          Ca 2 (14h - 22h)
+                        </span>
+                      ) : roster.previousShiftEndTime === '14:00' ? (
+                        <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 text-xs">
+                          Ca 1 (06h - 14h)
+                        </span>
+                      ) : roster.previousShiftEndTime === '16:00' || roster.previousShiftEndTime === '16:30' ? (
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 text-xs">
+                          HC ({roster.previousShiftEndTime === '16:00' ? '07h30 - 16h00' : '07h30 - 16h30'})
+                        </span>
+                      ) : roster.previousShiftEndTime ? (
+                        <span className="px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 font-semibold border border-slate-200 text-xs">
+                          Hết ca lúc {roster.previousShiftEndTime}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-center">
                       {roster.shiftCode === 'SHIFT_1' ? (
@@ -237,7 +255,7 @@ export const ShiftRosterPage: React.FC = () => {
                       )}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {roster.isRestViolation && (
+                      {roster.isRestViolation && canManageRoster && (
                         <button
                           onClick={() => handleFixViolation(roster, 'SHIFT_2')}
                           className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition shadow-sm"

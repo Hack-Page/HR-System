@@ -26,6 +26,9 @@ export default defineConfig({
   worker: {
     format: 'es'
   },
+  // Offline file:// (OneDrive HR-System): mọi asset phải tương đối để mở
+  // trực tiếp dist/index.html vẫn đúng đường dẫn. Không dùng '/'.
+  base: './',
   build: {
     target: 'esnext',
     assetsInlineLimit: 100000000,

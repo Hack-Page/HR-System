@@ -25,6 +25,7 @@ export const ProductivityQualityPage: React.FC = () => {
   const { success, warning, error } = useToast();
   const { confirm } = useModal();
   const { hasPermission } = useAuth();
+  const canManage = hasPermission('MANAGE_EMPLOYEES') || hasPermission('MANAGE_TIMESHEET');
 
   const [cycleMode, setCycleMode] = useState<'SEASONAL' | 'OFFICIAL'>('OFFICIAL');
   const [selectedMonth, setSelectedMonth] = useState<number>(() => {
@@ -51,8 +52,19 @@ export const ProductivityQualityPage: React.FC = () => {
   // Queries
   const lines = useLiveQuery(() => db.productionLines.toArray(), []) || [];
   const rates = useLiveQuery(
-    () => db.productivityQualityRates.where('month').equals(selectedMonth).filter(r => r.year === selectedYear).toArray(),
-    [selectedMonth, selectedYear]
+    async () => {
+      if (cycleMode === 'OFFICIAL') {
+        const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
+        const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear;
+        const [rCurr, rPrev] = await Promise.all([
+          db.productivityQualityRates.where('month').equals(selectedMonth).filter(r => r.year === selectedYear).toArray(),
+          db.productivityQualityRates.where('month').equals(prevMonth).filter(r => r.year === prevYear).toArray()
+        ]);
+        return [...rPrev, ...rCurr];
+      }
+      return db.productivityQualityRates.where('month').equals(selectedMonth).filter(r => r.year === selectedYear).toArray();
+    },
+    [selectedMonth, selectedYear, cycleMode]
   ) || [];
   const employees = useLiveQuery(() => db.employees.toArray(), []) || [];
 
@@ -78,6 +90,10 @@ export const ProductivityQualityPage: React.FC = () => {
 
   // Save single rate cell
   const handleSaveRate = async (lineId: string, dateStr: string, day: CalendarDay, type: 'NS' | 'CL', val: number) => {
+    if (!canManage) {
+      error('Không đủ quyền', 'Bạn không có quyền chỉnh sửa tỷ lệ năng suất và chất lượng.');
+      return;
+    }
     const key = `${lineId}_${dateStr}`;
     const existing = rateMap.get(key);
     const newRate: IProductivityQualityRate = {
@@ -101,6 +117,10 @@ export const ProductivityQualityPage: React.FC = () => {
   // Create new line
   const handleCreateLine = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManage) {
+      error('Không đủ quyền', 'Bạn không có quyền tạo chuyền sản xuất.');
+      return;
+    }
     if (!newLineName.trim()) {
       warning('Thiếu thông tin', 'Vui lòng nhập tên Chuyền/Line sản xuất.');
       return;
@@ -125,6 +145,10 @@ export const ProductivityQualityPage: React.FC = () => {
 
   // Delete line
   const handleDeleteLine = async (line: IProductionLine) => {
+    if (!canManage) {
+      error('Không đủ quyền', 'Bạn không có quyền xóa chuyền sản xuất.');
+      return;
+    }
     const ok = await confirm({
       title: 'Xóa Line sản xuất',
       message: `Bạn có chắc chắn muốn xóa "${line.name}"? Dữ liệu tỷ lệ đã lưu sẽ không thể hoàn tác.`,
@@ -142,6 +166,10 @@ export const ProductivityQualityPage: React.FC = () => {
   // Batch fill for full month
   const handleBatchFill = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canManage) {
+      error('Không đủ quyền', 'Bạn không có quyền điền tỷ lệ hàng loạt.');
+      return;
+    }
     if (!batchLineId) {
       warning('Chưa chọn Line', 'Vui lòng chọn một chuyền để điền tự động.');
       return;
@@ -211,19 +239,19 @@ export const ProductivityQualityPage: React.FC = () => {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={() => {
-              setBatchLineId(lines[0]?.id || '');
-              setShowBatchModal(true);
-            }}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition"
-          >
-            <Sparkles className="w-4 h-4 text-orange-500" />
-            <span>Điền Nhanh Cả Tháng</span>
-          </button>
+        {canManage && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => {
+                setBatchLineId(lines[0]?.id || '');
+                setShowBatchModal(true);
+              }}
+              className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl transition"
+            >
+              <Sparkles className="w-4 h-4 text-orange-500" />
+              <span>Điền Nhanh Cả Tháng</span>
+            </button>
 
-          {hasPermission('MANAGE_EMPLOYEES') && (
             <button
               onClick={() => setShowAddLineModal(true)}
               className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-500 to-rose-500 hover:from-orange-600 hover:to-rose-600 text-white text-xs font-bold rounded-xl shadow-md shadow-orange-200 transition"
@@ -231,8 +259,8 @@ export const ProductivityQualityPage: React.FC = () => {
               <Plus className="w-4 h-4" />
               <span>+ Thêm Line Sản Xuất</span>
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Filter Bar */}
@@ -339,7 +367,7 @@ export const ProductivityQualityPage: React.FC = () => {
                     <div className="text-sm font-black text-blue-800">{avgCL}%</div>
                   </div>
 
-                  {line.id !== 'line_rivet_1' && line.id !== 'line_rivet_2' && (
+                  {canManage && line.id !== 'line_rivet_1' && line.id !== 'line_rivet_2' && (
                     <button
                       onClick={() => handleDeleteLine(line)}
                       className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition"
@@ -401,12 +429,15 @@ export const ProductivityQualityPage: React.FC = () => {
                               min={0}
                               max={200}
                               defaultValue={val}
+                              disabled={!canManage}
                               key={`${key}_ns_${val}`}
                               onBlur={(e) => {
                                 const newV = parseFloat(e.target.value) || 0;
                                 if (newV !== val) handleSaveRate(line.id, day.dateStr, day, 'NS', newV);
                               }}
                               className={`w-10 px-1 py-1 text-center font-bold text-xs rounded-lg border focus:ring-2 focus:ring-orange-500/20 focus:outline-none transition ${
+                                !canManage ? 'opacity-70 cursor-not-allowed ' : ''
+                              }${
                                 isHigh
                                   ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                   : isMid
@@ -448,12 +479,15 @@ export const ProductivityQualityPage: React.FC = () => {
                               min={0}
                               max={100}
                               defaultValue={val}
+                              disabled={!canManage}
                               key={`${key}_cl_${val}`}
                               onBlur={(e) => {
                                 const newV = parseFloat(e.target.value) || 0;
                                 if (newV !== val) handleSaveRate(line.id, day.dateStr, day, 'CL', newV);
                               }}
                               className={`w-10 px-1 py-1 text-center font-bold text-xs rounded-lg border focus:ring-2 focus:ring-blue-500/20 focus:outline-none transition ${
+                                !canManage ? 'opacity-70 cursor-not-allowed ' : ''
+                              }${
                                 isHigh
                                   ? 'bg-blue-50 text-blue-800 border-blue-200'
                                   : isMid

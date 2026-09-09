@@ -1,10 +1,14 @@
 /**
- * OCR Worker Client - Promise-based wrapper cho onnx-ocr.worker.ts
+ * OCR Worker Client - Promise-based wrapper cho onnx-ocr.worker.ts,
+ * tự rơi về engine trực tiếp (main thread) khi Worker không dùng được.
  *
  * Điểm quan trọng:
  *  - Mỗi lần chạy có requestId riêng -> progress/kết quả không bị trộn giữa các lần gọi
  *  - Các lần gọi được xếp hàng tuần tự (worker chỉ xử lý 1 ảnh tại một thời điểm)
  *  - terminateOcrWorker() huỷ worker và từ chối mọi tác vụ đang chờ
+ *  - OFFLINE file:// (mở dist/index.html trực tiếp trong thư mục OneDrive):
+ *    Worker module riêng file không khởi tạo được trên file:// nên tự dùng
+ *    ocr-engine-direct.ts (pipeline thật, không Worker, model từ IndexedDB).
  */
 import type {
   OCRWorkerRequest,
@@ -12,6 +16,8 @@ import type {
   OCRWorkerResult,
   OCRWorkerError,
 } from '../types/ocr-worker-protocol';
+import { runOcrDirect } from './ocr-engine-direct';
+import { canUseWorker } from './ocr-assets-store';
 
 export interface OcrRunHandlers {
   onProgress?: (progress: number, step: string, message: string) => void;
@@ -19,14 +25,21 @@ export interface OcrRunHandlers {
 
 export interface OcrRunOptions extends OcrRunHandlers {
   fileName?: string;
+  /** Ép chạy trực tiếp không qua Worker (mặc định tự quyết theo giao thức). */
+  forceDirect?: boolean;
 }
 
 export type { OCRWorkerResult as OcrRunResult };
 
 let workerInstance: Worker | null = null;
+/** Worker đã xác định là hỏng trong phiên này -> bỏ qua, đi thẳng direct. */
+let workerBroken = false;
 
 /** Hàng đợi tuần tự: mỗi phần tử là continuation của cái trước */
 let queueTail: Promise<unknown> = Promise.resolve();
+
+/** Các tác vụ đang chờ — terminate sẽ reject toàn bộ (tránh treo vĩnh viễn). */
+const pendingRejects = new Set<(err: Error) => void>();
 
 function getWorker(): Worker {
   if (!workerInstance) {
@@ -40,8 +53,15 @@ function getWorker(): Worker {
 
 function runOnce(imageBytes: ArrayBuffer, options: OcrRunOptions): Promise<OCRWorkerResult> {
   return new Promise((resolve, reject) => {
-    const worker = getWorker();
+    let worker: Worker;
+    try {
+      worker = getWorker();
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)));
+      return;
+    }
     const requestId = `ocr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    pendingRejects.add(reject);
 
     const onMessage = (e: MessageEvent) => {
       const msg = e.data;
@@ -63,11 +83,16 @@ function runOnce(imageBytes: ArrayBuffer, options: OcrRunOptions): Promise<OCRWo
     };
     const onError = (e: ErrorEvent) => {
       cleanup();
+      // Worker crash (điển hình trên file://) -> đánh dấu hỏng để lần sau đi direct luôn.
+      workerBroken = true;
       reject(new Error(e.message || 'OCR Worker crashed'));
     };
     function cleanup() {
-      worker.removeEventListener('message', onMessage);
-      worker.removeEventListener('error', onError);
+      pendingRejects.delete(reject);
+      try {
+        worker.removeEventListener('message', onMessage);
+        worker.removeEventListener('error', onError);
+      } catch { /* ignore */ }
     }
 
     worker.addEventListener('message', onMessage);
@@ -78,13 +103,43 @@ function runOnce(imageBytes: ArrayBuffer, options: OcrRunOptions): Promise<OCRWo
       requestId,
       payload: { imageBytes, fileName: options.fileName },
     };
-    worker.postMessage(request, [imageBytes]); // transferable - tránh copy bộ nhớ
+    try {
+      worker.postMessage(request, [imageBytes]); // transferable - tránh copy bộ nhớ
+    } catch (err) {
+      cleanup();
+      workerBroken = true;
+      reject(err instanceof Error ? err : new Error(String(err)));
+    }
   });
+}
+
+/** Chạy pipeline trực tiếp main-thread, bọc kết quả về đúng OCRWorkerResult. */
+async function runDirectAsWorkerResult(
+  imageBytes: ArrayBuffer,
+  options: OcrRunOptions,
+): Promise<OCRWorkerResult> {
+  const started = Date.now();
+  const direct = await runOcrDirect(imageBytes, {
+    fileName: options.fileName,
+    onProgress: options.onProgress,
+  });
+  return {
+    type: 'COMPLETE',
+    requestId: `direct_${started}_${Math.random().toString(36).slice(2, 8)}`,
+    mode: 'REAL_ONNX',
+    fileName: direct.fileName,
+    lines: direct.lines,
+    grid: direct.grid,
+    processingTimeMs: direct.processingTimeMs,
+    details: `${direct.details} [chạy trực tiếp main-thread, không Worker]`,
+    rawText: direct.rawText,
+  };
 }
 
 /**
  * Chạy pipeline OCR thật trên một ảnh. Các lời gọi chồng nhau được xếp hàng,
  * kết quả luôn gắn đúng requestId của lần gọi.
+ * Tự chọn Worker (http://localhost) hay direct (file:// / Worker hỏng).
  */
 export function runOcrPipeline(
   imageBlob: Blob | ArrayBuffer,
@@ -93,14 +148,42 @@ export function runOcrPipeline(
   const job = async (): Promise<ArrayBuffer> =>
     imageBlob instanceof ArrayBuffer ? imageBlob : await imageBlob.arrayBuffer();
 
-  // Xếp hàng tuần tự để worker không bao giờ nhận 2 tác vụ cùng lúc
-  const run = queueTail.then(() => job()).then(bytes => runOnce(bytes, options));
+  // Xếp hàng tuần tự để worker/direct engine không bao giờ nhận 2 tác vụ cùng lúc
+  const run = queueTail.then(() => job()).then(async (bytes) => {
+    const wantDirect = options.forceDirect || workerBroken || !canUseWorker();
+    if (wantDirect) {
+      return runDirectAsWorkerResult(bytes, options);
+    }
+    try {
+      // Giữ 1 bản copy: postMessage transfer sẽ detach buffer gốc, nếu worker
+      // lỗi giữa chừng vẫn còn bản copy để fallback direct.
+      const backup = bytes.slice(0);
+      try {
+        return await runOnce(bytes, options);
+      } catch (workerErr) {
+        workerBroken = true;
+        return await runDirectAsWorkerResult(backup, options);
+      }
+    } catch (err) {
+      throw err;
+    }
+  });
   // Nếu 1 job lỗi vẫn phải tiếp tục hàng đợi cho các job sau
   queueTail = run.catch(() => undefined);
   return run;
 }
 
 export function terminateOcrWorker() {
-  workerInstance?.terminate();
+  try {
+    workerInstance?.terminate();
+  } catch { /* ignore */ }
   workerInstance = null;
+  if (pendingRejects.size > 0) {
+    const err = new Error('OCR Worker đã bị huỷ (terminateOcrWorker)');
+    const rejects = Array.from(pendingRejects);
+    pendingRejects.clear();
+    rejects.forEach(reject => {
+      try { reject(err); } catch { /* ignore */ }
+    });
+  }
 }

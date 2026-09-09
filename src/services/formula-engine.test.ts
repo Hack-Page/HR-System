@@ -133,11 +133,20 @@ describe('computeEmployeeTimesheetSummary', () => {
     const emp = mockEmployee({
       shiftClassId: 'OFFICE_M_F',
       productivityGroup: 2,
-      probationEndDate: `31/12/${futureYear}` // đang trong thời gian thử việc
+      probationEndDate: `31/12/${futureYear}` // đang trong thời gian thử việc DD/MM/YYYY
     });
     const cells: IDailyTimesheetCell[] = Array(23).fill(0).map((_, i) => cell('W', { dayIndex: i + 1 }));
     const res = computeEmployeeTimesheetSummary(emp, cells);
     expect(res.productivityBonus).toBe(0);
+
+    // Cũng hỗ trợ định dạng ISO YYYY-MM-DD
+    const empIso = mockEmployee({
+      shiftClassId: 'OFFICE_M_F',
+      productivityGroup: 2,
+      probationEndDate: `${futureYear}-12-31`
+    });
+    const resIso = computeEmployeeTimesheetSummary(empIso, cells);
+    expect(resIso.productivityBonus).toBe(0);
   });
 
   it('productivityGroup 2: nghỉ UL/Off từ 2 ngày -> trừ 50% tiền năng suất', () => {
@@ -185,4 +194,26 @@ describe('computeEmployeeTimesheetSummary', () => {
     expect(res.lateEarlyCount).toBe(2);
     expect(res.missingPunchCount).toBe(2); // Off + missing checkOut
   });
+
+  it('productivityGroup 2: applies lineProductivityRate and lineQualityRate when applyLineRatesToGroup2 is true', () => {
+    const emp = mockEmployee({
+      shiftClassId: 'OFFICE_M_F', // standardWD = 23
+      productivityGroup: 2,
+      productionLine: 'line_rivet_1'
+    });
+    // 23 ngày đi làm đầy đủ
+    const cells: IDailyTimesheetCell[] = Array(23).fill(0).map((_, i) => cell('W', { dayIndex: i + 1 }));
+    const res = computeEmployeeTimesheetSummary(emp, cells, {
+      productivityConfig: {
+        applyLineRatesToGroup2: true,
+        defaultBaseRate: 1000000
+      },
+      lineProductivityRate: 110, // 110% NS
+      lineQualityRate: 98 // 98% CL
+    });
+    // base = 23 * 1,000,000 / 23 = 1,000,000
+    // adjusted = Math.round(1,000,000 * 1.10 * 0.98) = 1,078,000
+    expect(res.productivityBonus).toBe(1078000);
+  });
 });
+

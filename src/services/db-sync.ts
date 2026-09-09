@@ -9,10 +9,22 @@
  *    trừ bảng accounts (tài khoản đăng nhập là dữ liệu cục bộ của từng máy)
  */
 import { db } from '../db';
-import { IEmployee, IDailyTimesheetCell, IOvertimeRecord, ILeaveRequest, IShiftRosterEntry, IOCREntry, ISystemSettings, IShiftClass, IRbacRole } from '../types';
+import { 
+  IEmployee, 
+  IDailyTimesheetCell, 
+  IOvertimeRecord, 
+  ILeaveRequest, 
+  IShiftRosterEntry, 
+  IOCREntry, 
+  ISystemSettings, 
+  IShiftClass, 
+  IRbacRole,
+  IProductionLine,
+  IProductivityQualityRate
+} from '../types';
 import { DEFAULT_SETTINGS } from '../db';
 
-export const SNAPSHOT_VERSION = '3.0.0';
+export const SNAPSHOT_VERSION = '3.1.0';
 
 export interface IDatabaseSnapshot {
   version: string;
@@ -28,6 +40,9 @@ export interface IDatabaseSnapshot {
   // v3: thêm master data mới — optional để tương thích snapshot v2 cũ
   shiftClasses?: IShiftClass[];
   rbacRoles?: IRbacRole[];
+  // v3.1: thêm master data chuyền sản xuất & tỷ lệ năng suất chất lượng
+  productionLines?: IProductionLine[];
+  productivityQualityRates?: IProductivityQualityRate[];
 }
 
 // ---------------------------------------------------------------------------
@@ -47,7 +62,9 @@ export async function exportDatabaseToSnapshot(userName: string = 'HR Admin'): P
     ocrScans: await db.ocrScans.toArray(),
     settings: ((await db.settings.get('systemSettings'))?.value as ISystemSettings) || undefined,
     shiftClasses: await db.shiftClasses.toArray(),
-    rbacRoles: await db.rbacRoles.toArray()
+    rbacRoles: await db.rbacRoles.toArray(),
+    productionLines: await db.productionLines.toArray(),
+    productivityQualityRates: await db.productivityQualityRates.toArray()
   };
 
   const jsonStr = JSON.stringify(snapshot, null, 2);
@@ -75,6 +92,8 @@ interface ValidatedSnapshot {
   data: Required<Pick<IDatabaseSnapshot, 'employees' | 'dailyTimesheets' | 'overtimeRecords' | 'leaveRequests' | 'shiftRosters' | 'ocrScans'>> & {
     shiftClasses: IShiftClass[];
     rbacRoles: IRbacRole[];
+    productionLines: IProductionLine[];
+    productivityQualityRates: IProductivityQualityRate[];
   };
   settings?: ISystemSettings;
   skipped: Record<string, number>;
@@ -114,7 +133,9 @@ function validateSnapshot(raw: unknown): ValidatedSnapshot {
     shiftRosters: pickArray<IShiftRosterEntry>('shiftRosters', s => isNonEmptyString(s.employeeId_date)),
     ocrScans: pickArray<IOCREntry>('ocrScans', o => isNonEmptyString(o.id)),
     shiftClasses: pickArray<IShiftClass>('shiftClasses', s => isNonEmptyString(s.shiftClassId) && isNonEmptyString(s.startTime)),
-    rbacRoles: pickArray<IRbacRole>('rbacRoles', r => isNonEmptyString(r.roleId) && Array.isArray((r as any).permissions))
+    rbacRoles: pickArray<IRbacRole>('rbacRoles', r => isNonEmptyString(r.roleId) && Array.isArray((r as any).permissions)),
+    productionLines: pickArray<IProductionLine>('productionLines', p => isNonEmptyString(p.id) && isNonEmptyString(p.name)),
+    productivityQualityRates: pickArray<IProductivityQualityRate>('productivityQualityRates', r => isNonEmptyString(r.lineId_date) && isNonEmptyString(r.lineId) && typeof r.productivityRate === 'number')
   };
 
   let settings: ISystemSettings | undefined;
@@ -158,9 +179,10 @@ export async function importDatabaseFromSnapshot(file: File): Promise<{
 
   // Toàn bộ thay thế nằm trong một transaction - fail ở bất kỳ đâu sẽ rollback toàn bộ
   // v5: thêm shiftClasses/rbacRoles vào sync (accounts vẫn local-only không sync)
+  // v7: thêm productionLines/productivityQualityRates vào sync
   await db.transaction(
     'rw',
-    [db.employees, db.dailyTimesheets, db.overtimeRecords, db.leaveRequests, db.shiftRosters, db.ocrScans, db.settings, db.shiftClasses, db.rbacRoles],
+    [db.employees, db.dailyTimesheets, db.overtimeRecords, db.leaveRequests, db.shiftRosters, db.ocrScans, db.settings, db.shiftClasses, db.rbacRoles, db.productionLines, db.productivityQualityRates],
     async () => {
       await Promise.all([
         db.employees.clear(),
@@ -170,7 +192,9 @@ export async function importDatabaseFromSnapshot(file: File): Promise<{
         db.shiftRosters.clear(),
         db.ocrScans.clear(),
         db.shiftClasses.clear(),
-        db.rbacRoles.clear()
+        db.rbacRoles.clear(),
+        db.productionLines.clear(),
+        db.productivityQualityRates.clear()
       ]);
 
       await Promise.all([
@@ -181,7 +205,9 @@ export async function importDatabaseFromSnapshot(file: File): Promise<{
         data.shiftRosters.length && db.shiftRosters.bulkPut(data.shiftRosters),
         data.ocrScans.length && db.ocrScans.bulkPut(data.ocrScans),
         (data as any).shiftClasses?.length && db.shiftClasses.bulkPut((data as any).shiftClasses),
-        (data as any).rbacRoles?.length && db.rbacRoles.bulkPut((data as any).rbacRoles)
+        (data as any).rbacRoles?.length && db.rbacRoles.bulkPut((data as any).rbacRoles),
+        (data as any).productionLines?.length && db.productionLines.bulkPut((data as any).productionLines),
+        (data as any).productivityQualityRates?.length && db.productivityQualityRates.bulkPut((data as any).productivityQualityRates)
       ]);
 
       if (settings) {
@@ -206,6 +232,17 @@ export async function importDatabaseFromSnapshot(file: File): Promise<{
           const now = new Date().toISOString();
           const perms = DEFAULT_SETTINGS.rolePermissions as Record<string, string[]>;
           await db.rbacRoles.bulkPut(Object.entries(perms).map(([roleId, permissions]) => ({ roleId, roleName: roleId, permissions, isSystem: true, isSystemFlag: 1, createdAt: now })) as any);
+        }
+      }
+      // Nếu snapshot v2/v3 cũ không có productionLines thì re-seed 2 line mặc định để không trống
+      if (!(data as any).productionLines?.length) {
+        const plCount = await db.productionLines.count();
+        if (plCount === 0) {
+          const now = new Date().toISOString();
+          await db.productionLines.bulkPut([
+            { id: 'line_rivet_1', name: 'Line Rivet 1', description: 'Chuyền đinh tán số 1', createdAt: now },
+            { id: 'line_rivet_2', name: 'Line Rivet 2', description: 'Chuyền đinh tán số 2', createdAt: now }
+          ]);
         }
       }
     }

@@ -26,11 +26,14 @@ import { OcrSpreadsheetPreview, SpreadsheetRow } from '../components/ocr/OcrSpre
 import { IExtractedFormRow, reconcileRows, commitVerifiedRows } from '../services/ocr-form-parser';
 import { runOcrPipeline } from '../services/ocr-worker-client';
 import type { OCRWorkerResult } from '../types/ocr-worker-protocol';
+import { IEmployee } from '../types';
 import { testONNXModelRuntime, IONNXModelHealthReport } from '../services/onnx-model-checker';
+import { isFileProtocol, putOcrAsset, guessOcrAssetKey, getStoredOcrAssetKeys } from '../services/ocr-assets-store';
 import {
   normalizeDateString,
   parseOvertimeHours,
   mapGridToTableRows,
+  normalizeEmployeeCode,
 } from '../services/ocr-table-engine';
 import { applyHRCorrections } from '../services/hr-rag-postprocessor';
 
@@ -74,19 +77,30 @@ async function hashBuffer(buf: ArrayBuffer): Promise<string> {
 }
 
 /** Chuyển kết quả lưới OCR thật -> dòng dữ liệu có cấu trúc để đối soát */
-function mappedToFormRows(grid: OCRWorkerResult['grid']): IExtractedFormRow[] {
-  // FIX: Giữ nguyên cấu trúc nhưng áp dụng HR RAG trước khi mapping để hỗ trợ tiếng Việt HR
+function mappedToFormRows(grid: OCRWorkerResult['grid'], employeesCatalog: IEmployee[] = []): IExtractedFormRow[] {
+  // Áp dụng HR RAG trước khi mapping để chuẩn hóa cấu trúc
   const hrGrid = applyHRGridCorrections(grid);
   const mapped = mapGridToTableRows(hrGrid);
   return mapped.map((m, i) => {
     const dateNorm = m.rawDate ? normalizeDateString(m.rawDate) : { normalizedDate: '', valid: false };
     const hoursParsed = parseOvertimeHours(m.hoursText ?? '', m.fromTime, m.toTime);
+    const empCode = m.employeeCode ?? '';
+    let empName = m.fullName ?? '';
+    let empDept = m.department ?? '';
+    // Nghiệp vụ: OCR tập trung chuẩn MSNV, Ngày, Giờ tăng ca; Tên & Bộ phận tự động tra cứu từ danh mục nhân sự Master
+    if (employeesCatalog.length > 0 && empCode) {
+      const normEmp = normalizeEmployeeCode(empCode, employeesCatalog);
+      if (normEmp.matched) {
+        empName = normEmp.name;
+        empDept = normEmp.dept || empDept;
+      }
+    }
     return {
       rowId: nextRowId(),
       stt: m.stt ?? i + 1,
-      fullName: m.fullName ?? '',
-      employeeId: m.employeeCode ?? '',
-      department: m.department ?? '',
+      fullName: empName,
+      employeeId: empCode,
+      department: empDept,
       otDateRaw: m.rawDate ?? '',
       otDate: dateNorm.normalizedDate,
       fromTime: m.fromTime ?? '',
@@ -103,6 +117,11 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
   const { alertModal, confirm } = useModal();
   const { hasPermission, currentRole } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Kho model offline cho file:// (mở trực tiếp trong thư mục OneDrive, không Worker)
+  const offlineAssetsInputRef = useRef<HTMLInputElement>(null);
+  const [isLoadingAssets, setIsLoadingAssets] = useState(false);
+  const [offlineAssetCount, setOfflineAssetCount] = useState<number>(-1);
+  const fileMode = isFileProtocol();
 
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -140,7 +159,7 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
   // Dòng dữ liệu có cấu trúc (đối soát)
   const [formRows, setFormRows] = useState<IExtractedFormRow[]>([]);
 
-  const canCommit = hasPermission('SCAN_OCR');
+  const canCommit = hasPermission('SCAN_OCR') || hasPermission('SCAN_DEPT_OCR');
 
   // Live queries
   const employees = useLiveQuery(() => db.employees.toArray(), []) || [];
@@ -152,6 +171,12 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
     batchRefs.current.forEach(url => URL.revokeObjectURL(url));
     batchRefs.current.clear();
   }, []);
+
+  // file://: đếm sẵn model đã nạp trong kho offline để hiển thị trạng thái nút
+  useEffect(() => {
+    if (!fileMode) return;
+    getStoredOcrAssetKeys().then(keys => setOfflineAssetCount(keys.length)).catch(() => setOfflineAssetCount(0));
+  }, [fileMode]);
 
   // Persist OCR data khi qua menu Quản lý tăng ca thì không reset - lưu vào localStorage
   const STORAGE_KEY = 'ocrVerification_persist_v2';
@@ -228,7 +253,7 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
         yCenter: r.yCenter,
         cells: r.cells.map(c => ({ text: c.text, confidence: c.confidence })),
       })));
-      setFormRows(mappedToFormRows(result.grid));
+      setFormRows(mappedToFormRows(result.grid, employees));
     });
     // Bổ sung thông tin HR RAG vào details
     const detailsWithHR = correctedCells > 0
@@ -453,7 +478,7 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
           cells: r.cells.map(c => ({ text: c.text, confidence: c.confidence }))
         }));
         accumulatedGridRows = [...accumulatedGridRows, ...newGridRows];
-        const mapped = mappedToFormRows(result.grid);
+        const mapped = mappedToFormRows(result.grid, employees);
         accumulatedFormRows = [...accumulatedFormRows, ...mapped];
         startTransition(() => {
           setGridRows(accumulatedGridRows);
@@ -487,8 +512,8 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
       warning('Lô không có dòng hợp lệ', 'Đã quét xong nhưng không có dòng nào đủ Mã NV + ngày + giờ để ghi. Kiểm tra "Dữ liệu Thô Chờ xử lý" và sửa tay trước khi bấm Ghi Nhận.');
       info('Gợi ý', `Đã quét ${batch.length} file, ${accumulatedFormRows.length} dòng thô nhưng chưa đủ điều kiện ghi tự động.`);
     } else {
-      if (!hasPermission('SCAN_OCR')) {
-        warning('Không đủ quyền auto-ghi', `Vai trò "${currentRole}" không có quyền SCAN_OCR. Dữ liệu đã quét xong, vui lòng liên hệ HR Manager để ghi.`);
+      if (!canCommit) {
+        warning('Không đủ quyền auto-ghi', `Vai trò "${currentRole}" không có quyền ghi dữ liệu quét OCR. Dữ liệu đã quét xong, vui lòng liên hệ Quản lý để ghi.`);
       } else {
         try {
           const { updated, scansWritten } = await commitVerifiedRows(validRows, {
@@ -503,8 +528,43 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
         }
       }
     }
-    setFormTitle(`Đã quét xong lô ${batch.length} file - ${validRows.length} dòng hợp lệ đã ${hasPermission('SCAN_OCR') ? 'tự động ghi' : 'sẵn sàng'}`);
+    setFormTitle(`Đã quét xong lô ${batch.length} file - ${validRows.length} dòng hợp lệ đã ${canCommit ? 'tự động ghi' : 'sẵn sàng'}`);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // 1b. Nạp model Paddle vào kho offline (chỉ cần 1 lần trên file://):
+  // chọn các file trong PaddleOCR-Models/onnx + dictionaries + ort, lưu vào
+  // IndexedDB để engine trực tiếp (không Worker) đọc được khi mở file trực tiếp.
+  const handleOfflineAssetsSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []) as File[];
+    if (files.length === 0) return;
+    setIsLoadingAssets(true);
+    try {
+      let saved = 0;
+      const skipped: string[] = [];
+      for (const f of files) {
+        const key = guessOcrAssetKey(f.name);
+        if (!key) { skipped.push(f.name); continue; }
+        await putOcrAsset(key, f, f.name);
+        saved++;
+      }
+      const keys = await getStoredOcrAssetKeys();
+      setOfflineAssetCount(keys.length);
+      if (saved > 0) {
+        success('Đã nạp model offline', `Lưu ${saved} file vào kho offline (${keys.length} mục). Từ nay mở file trực tiếp vẫn quét OCR được.`);
+      }
+      if (skipped.length > 0) {
+        warning('Bỏ qua file lạ', `${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? ` (+${skipped.length - 5} file)` : ''} — chỉ nhận det/rec .onnx, latin_dict.txt, vi_dict.txt, ort-wasm.`);
+      }
+      if (saved === 0 && skipped.length > 0) {
+        info('Gợi ý', 'Mở thư mục PaddleOCR-Models, chọn: onnx/ch_PP-OCRv4_det_infer.onnx, onnx/latin_PP-OCRv3_rec.onnx, dictionaries/latin_dict.txt, dictionaries/vi_dict.txt, ort/ort-wasm-simd-threaded.wasm.');
+      }
+    } catch (err: unknown) {
+      error('Lỗi nạp model offline', err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoadingAssets(false);
+      if (offlineAssetsInputRef.current) offlineAssetsInputRef.current.value = '';
+    }
   };
 
   // 2. Ảnh mẫu image.png - đã ẩn khỏi toolbar theo yêu cầu (giữ hàm để không vỡ logic, nhưng không hiển thị nút)
@@ -513,8 +573,8 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
       setIsScanning(true);
       setScanProgress(3);
       setStreamingLogs([`[${new Date().toLocaleTimeString()}] Tải ảnh mẫu và đưa vào quy trình OCR-Scan...`]);
-      const res = await fetch('/image.png');
-      if (!res.ok) throw new Error(`Không tải được /image.png (HTTP ${res.status})`);
+      const res = await fetch('./image.png');
+      if (!res.ok) throw new Error(`Không tải được ./image.png (HTTP ${res.status})`);
       const blob = await res.blob();
       const url = replacePreviewImage(blob, 'image.png');
       const bytes = await blob.arrayBuffer();
@@ -553,7 +613,7 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
       })),
       columnBoundaries: [],
     };
-    setFormRows(mappedToFormRows(grid));
+    setFormRows(mappedToFormRows(grid, employees));
     info('Đã nạp lại từ bảng quét', 'Dữ liệu đối soát được cập nhật theo nội dung hiện tại của bảng tính.');
   };
 
@@ -567,6 +627,14 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
         const hoursRes = parseOvertimeHours('', String(updated.fromTime), String(updated.toTime));
         if (hoursRes.computedFromTime !== undefined) {
           updated.otHours = hoursRes.computedFromTime;
+        }
+      } else if (field === 'employeeId') {
+        // Tự động tìm kiếm qua MSNV từ menu danh sách nhân viên để lấy Họ tên và Bộ phận
+        const normEmp = normalizeEmployeeCode(String(value), employees);
+        if (normEmp.matched) {
+          updated.fullName = normEmp.name;
+          if (normEmp.dept) updated.department = normEmp.dept;
+          updated.employeeId = normEmp.normalizedId;
         }
       }
       return updated;
@@ -600,7 +668,7 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
   // 6. Ghi DB - yêu cầu quyền + hộp thoại xác nhận, transaction phía service
   const handleCommitToDatabase = async () => {
     if (!canCommit) {
-      warning('Không đủ quyền', `Vai trò "${currentRole}" không có quyền SCAN_OCR.`);
+      warning('Không đủ quyền', `Vai trò "${currentRole}" không có quyền SCAN_OCR hoặc SCAN_DEPT_OCR.`);
       return;
     }
     const validRows = reconciledRows.filter(r => r.employeeId && r.otDate && r.otHours !== null);
@@ -677,6 +745,12 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
       setIsTestingModel(true);
       const report: IONNXModelHealthReport = await testONNXModelRuntime();
       setIsTestingModel(false);
+      if (report.needsOfflineAssets) {
+        warning(
+          'Thiếu model offline',
+          'Đang mở file trực tiếp (không Worker) mà kho offline chưa đủ model. Bấm "Nạp model offline" và chọn các file trong PaddleOCR-Models (det/rec .onnx, latin_dict.txt, vi_dict.txt, ort-wasm).'
+        );
+      }
       const isReady = report.status === 'READY';
       const isWarning = report.status === 'WARNING';
       alertModal(
@@ -706,6 +780,11 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
             </div>
             <div className="text-[11px] pt-1 border-t border-slate-200 text-slate-500">
               Cấu hình chuẩn cho form LPVN-HR-F-0004 · Đánh máy, chữ ký viết tay
+              {report.protocol === 'file' && (
+                <span className="block mt-1 font-bold text-amber-700">
+                  Chế độ file trực tiếp (không Worker) · Nguồn model: {report.assetSource === 'idb' ? 'kho offline (IndexedDB)' : report.assetSource === 'mixed' ? 'kết hợp server + kho offline' : report.assetSource === 'server' ? 'thư mục PaddleOCR-Models' : 'chưa đủ — cần Nạp model offline'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -762,10 +841,22 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
             <span>Test OCR</span>
           </button>
 
+          {fileMode && (
+            <button
+              onClick={() => offlineAssetsInputRef.current?.click()}
+              disabled={isLoadingAssets}
+              title="Chế độ mở file trực tiếp (không Worker): chọn file model Paddle 1 lần để lưu vào kho offline, các lần sau quét luôn không cần mạng"
+              className="flex items-center gap-2 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 text-xs font-bold rounded-xl transition shadow-sm"
+            >
+              {isLoadingAssets ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
+              <span>{offlineAssetCount >= 0 ? `Nạp model offline (${offlineAssetCount} mục)` : 'Nạp model offline'}</span>
+            </button>
+          )}
+
           <button
             onClick={handleCommitToDatabase}
             disabled={isScanning || !canCommit}
-            title={canCommit ? 'Ghi kết quả đã xác nhận vào IndexedDB' : `Vai trò "${currentRole}" không có quyền SCAN_OCR`}
+            title={canCommit ? 'Ghi kết quả đã xác nhận vào IndexedDB' : `Vai trò "${currentRole}" không có quyền SCAN_OCR / SCAN_DEPT_OCR`}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-xs font-bold rounded-xl transition shadow-md shadow-emerald-200"
           >
             <Save className="w-4 h-4" />
@@ -797,6 +888,7 @@ export const OCRVerificationPage: React.FC<OCRVerificationPageProps> = ({ onNavi
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*,application/pdf" multiple className="hidden" />
+          <input type="file" ref={offlineAssetsInputRef} onChange={handleOfflineAssetsSelected} accept=".onnx,.txt,.wasm,.mjs" multiple className="hidden" />
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isScanning}

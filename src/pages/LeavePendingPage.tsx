@@ -177,11 +177,35 @@ export const LeavePendingPage: React.FC = () => {
     });
 
     if (ok) {
-      await db.leaveRequests.update(req.id, {
-        status: 'REJECTED',
-        rejectionReason: 'Vắng mặt không phép vi phạm nội quy'
-      });
-      success('Đã cập nhật trạng thái', 'Bản ghi đã được xử lý.');
+      const cellKey = `${req.employeeId}_${req.date}`;
+      const [y, m] = req.date.split('-').map(Number);
+      try {
+        await db.transaction('rw', db.dailyTimesheets, db.leaveRequests, async () => {
+          const existingCell = await db.dailyTimesheets.get(cellKey);
+          await db.dailyTimesheets.put({
+            employeeId_date: cellKey,
+            employeeId: req.employeeId,
+            date: req.date,
+            dayIndex: parseInt(req.date.split('-')[2], 10),
+            statusCode: 'Off',
+            calculatedOvertime: existingCell?.calculatedOvertime || 0,
+            checkIn: existingCell?.checkIn,
+            checkOut: existingCell?.checkOut,
+            isViolation: true,
+            isViolationFlag: 1,
+            violationNote: 'Từ chối bù phép - ghi nhận không phép (Off)',
+            month: m,
+            year: y
+          });
+          await db.leaveRequests.update(req.id, {
+            status: 'REJECTED',
+            rejectionReason: 'Vắng mặt không phép vi phạm nội quy'
+          });
+        });
+        success('Đã ghi nhận không phép', `Đã cập nhật ngày ${req.date} của ${req.fullName} thành "Off" (nghỉ không phép).`);
+      } catch (err: any) {
+        error('Xử lý thất bại', err?.message || String(err));
+      }
     }
   };
 

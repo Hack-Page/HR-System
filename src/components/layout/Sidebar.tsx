@@ -69,135 +69,155 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onSelectPage }) =>
 
       {/* Navigation - flat, không còn accordion, không còn MAIN MENU / HR Applications header */}
       <div className="p-3 space-y-1 flex-1 text-xs">
-        {/* Dashboard - bấm thẳng vào báo cáo chính, bỏ Employee Analytics và submenu */}
-        <button
-          onClick={() => onSelectPage('dashboard')}
-          className={menuItemClass(activePage === 'dashboard')}
-        >
-          <div className="flex items-center gap-2.5">
-            <LayoutDashboard className={`w-4 h-4 ${activePage === 'dashboard' ? 'text-[#FF5B26]' : 'text-slate-500'}`} />
-            <span>Dashboard</span>
-          </div>
-        </button>
+        {/* Dashboard */}
+        {(hasPermission('VIEW_DASHBOARD') || hasPermission('VIEW_DEPT_DASHBOARD')) && (
+          <button
+            onClick={() => onSelectPage('dashboard')}
+            className={menuItemClass(activePage === 'dashboard')}
+          >
+            <div className="flex items-center gap-2.5">
+              <LayoutDashboard className={`w-4 h-4 ${activePage === 'dashboard' ? 'text-[#FF5B26]' : 'text-slate-500'}`} />
+              <span>Dashboard</span>
+            </div>
+          </button>
+        )}
 
         {/* Employee Master Catalog */}
-        <button
-          onClick={() => onSelectPage('employees')}
-          className={menuItemClass(activePage === 'employees')}
-        >
-          <div className="flex items-center gap-2.5">
-            <Users className={`w-4 h-4 ${activePage === 'employees' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
-            <span>{t('employees')}</span>
-          </div>
-        </button>
+        {(hasPermission('MANAGE_EMPLOYEES') || hasPermission('VIEW_DEPT_EMPLOYEES')) && (
+          <button
+            onClick={() => onSelectPage('employees')}
+            className={menuItemClass(activePage === 'employees')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Users className={`w-4 h-4 ${activePage === 'employees' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+              <span>{t('employees')}</span>
+            </div>
+          </button>
+        )}
 
         {/* Timesheet - đã đổi thành Bảng Chấm Công */}
-        <button
-          onClick={() => onSelectPage('timesheet')}
-          className={menuItemClass(activePage === 'timesheet')}
-        >
-          <div className="flex items-center gap-2.5">
-            <CalendarDays className={`w-4 h-4 ${activePage === 'timesheet' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
-            <span>{t('timesheet')}</span>
-          </div>
-        </button>
+        {(hasPermission('MANAGE_TIMESHEET') || hasPermission('VIEW_DEPT_TIMESHEET')) && (
+          <button
+            onClick={() => onSelectPage('timesheet')}
+            className={menuItemClass(activePage === 'timesheet')}
+          >
+            <div className="flex items-center gap-2.5">
+              <CalendarDays className={`w-4 h-4 ${activePage === 'timesheet' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+              <span>{t('timesheet')}</span>
+            </div>
+          </button>
+        )}
 
         {/* Tỷ Lệ Đạt Năng Suất & Chất Lượng */}
-        <button
-          onClick={() => onSelectPage('productivityQuality')}
-          className={menuItemClass(activePage === 'productivityQuality')}
-        >
-          <div className="flex items-center gap-2.5">
-            <TrendingUp className={`w-4 h-4 ${activePage === 'productivityQuality' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
-            <span>Tỷ Lệ Đạt NS & CL</span>
-          </div>
-        </button>
+        {(hasPermission('MANAGE_EMPLOYEES') || hasPermission('MANAGE_TIMESHEET')) && (
+          <button
+            onClick={() => onSelectPage('productivityQuality')}
+            className={menuItemClass(activePage === 'productivityQuality')}
+          >
+            <div className="flex items-center gap-2.5">
+              <TrendingUp className={`w-4 h-4 ${activePage === 'productivityQuality' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+              <span>Tỷ Lệ Đạt NS & CL</span>
+            </div>
+          </button>
+        )}
 
         {/* Overtime Page */}
-        <button
-          onClick={() => onSelectPage('overtime')}
-          className={menuItemClass(activePage === 'overtime')}
-        >
-          <div className="flex items-center gap-2.5">
-            <Clock className={`w-4 h-4 ${activePage === 'overtime' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
-            <span>{t('overtime')}</span>
-          </div>
-          {pendingOTCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800">
-              {pendingOTCount}
-            </span>
-          )}
-        </button>
+        {(hasPermission('MANAGE_OT') || hasPermission('PROPOSE_DEPT_OT')) && (
+          <button
+            onClick={() => onSelectPage('overtime')}
+            className={menuItemClass(activePage === 'overtime')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Clock className={`w-4 h-4 ${activePage === 'overtime' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+              <span>{t('overtime')}</span>
+            </div>
+            {pendingOTCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-100 text-amber-800">
+                {pendingOTCount}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Leave Pending Page */}
-        <button
-          onClick={() => onSelectPage('leavePending')}
-          className={menuItemClass(activePage === 'leavePending')}
-        >
-          <div className="flex items-center gap-2.5">
-            <CalendarCheck className={`w-4 h-4 ${activePage === 'leavePending' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
-            <span>{t('leavePending')}</span>
-          </div>
-          {pendingLeaveCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800">
-              {pendingLeaveCount}
-            </span>
-          )}
-        </button>
+        {(hasPermission('MANAGE_LEAVE') || hasPermission('VIEW_DEPT_LEAVE')) && (
+          <button
+            onClick={() => onSelectPage('leavePending')}
+            className={menuItemClass(activePage === 'leavePending')}
+          >
+            <div className="flex items-center gap-2.5">
+              <CalendarCheck className={`w-4 h-4 ${activePage === 'leavePending' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+              <span>{t('leavePending')}</span>
+            </div>
+            {pendingLeaveCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-100 text-rose-800">
+                {pendingLeaveCount}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Shift Roster & 12h Rest Violations */}
-        <button
-          onClick={() => onSelectPage('shiftRoster')}
-          className={menuItemClass(activePage === 'shiftRoster')}
-        >
-          <div className="flex items-center gap-2.5">
-            <RotateCcw className={`w-4 h-4 ${activePage === 'shiftRoster' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
-            <span>{t('shiftRoster')}</span>
-          </div>
-          {shiftViolationCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-600 text-white animate-pulse">
-              {shiftViolationCount}
-            </span>
-          )}
-        </button>
+        {(hasPermission('MANAGE_ROSTER') || hasPermission('MANAGE_DEPT_ROSTER')) && (
+          <button
+            onClick={() => onSelectPage('shiftRoster')}
+            className={menuItemClass(activePage === 'shiftRoster')}
+          >
+            <div className="flex items-center gap-2.5">
+              <RotateCcw className={`w-4 h-4 ${activePage === 'shiftRoster' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+              <span>{t('shiftRoster')}</span>
+            </div>
+            {shiftViolationCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-600 text-white animate-pulse">
+                {shiftViolationCount}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Sắp Xếp Ca Làm Việc - mới, nằm ngay dưới Phân Ca, lọc theo bộ phận, role-based */}
-        <button
-          onClick={() => onSelectPage('shiftAssignment')}
-          className={menuItemClass(activePage === 'shiftAssignment')}
-        >
-          <div className="flex items-center gap-2.5">
-            <Briefcase className={`w-4 h-4 ${activePage === 'shiftAssignment' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
-            <span>{t('shiftAssignment')}</span>
-          </div>
-        </button>
+        {(hasPermission('MANAGE_ROSTER') || hasPermission('MANAGE_DEPT_ROSTER')) && (
+          <button
+            onClick={() => onSelectPage('shiftAssignment')}
+            className={menuItemClass(activePage === 'shiftAssignment')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Briefcase className={`w-4 h-4 ${activePage === 'shiftAssignment' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+              <span>{t('shiftAssignment')}</span>
+            </div>
+          </button>
+        )}
 
         {/* Theo dõi Đi trễ/Về sớm/MCO/MCI - mới */}
-        <button
-          onClick={() => onSelectPage('attendanceViolation')}
-          className={menuItemClass(activePage === 'attendanceViolation')}
-        >
-          <div className="flex items-center gap-2.5">
-            <ShieldAlert className={`w-4 h-4 ${activePage === 'attendanceViolation' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
-            <span>{t('attendanceViolation')}</span>
-          </div>
-          {attendanceViolationCount > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-800 border border-orange-200">
-              {attendanceViolationCount}
-            </span>
-          )}
-        </button>
+        {(hasPermission('MANAGE_TIMESHEET') || hasPermission('VIEW_DEPT_TIMESHEET')) && (
+          <button
+            onClick={() => onSelectPage('attendanceViolation')}
+            className={menuItemClass(activePage === 'attendanceViolation')}
+          >
+            <div className="flex items-center gap-2.5">
+              <ShieldAlert className={`w-4 h-4 ${activePage === 'attendanceViolation' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+              <span>{t('attendanceViolation')}</span>
+            </div>
+            {attendanceViolationCount > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-100 text-orange-800 border border-orange-200">
+                {attendanceViolationCount}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* OCR Overtime Verification */}
-        <button
-          onClick={() => onSelectPage('ocrVerification')}
-          className={menuItemClass(activePage === 'ocrVerification')}
-        >
-          <div className="flex items-center gap-2.5">
-            <ScanLine className={`w-4 h-4 ${activePage === 'ocrVerification' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
-            <span>{t('ocrVerification')}</span>
-          </div>
-        </button>
+        {(hasPermission('SCAN_OCR') || hasPermission('SCAN_DEPT_OCR')) && (
+          <button
+            onClick={() => onSelectPage('ocrVerification')}
+            className={menuItemClass(activePage === 'ocrVerification')}
+          >
+            <div className="flex items-center gap-2.5">
+              <ScanLine className={`w-4 h-4 ${activePage === 'ocrVerification' ? 'text-[#FF5B26]' : 'text-slate-400'}`} />
+              <span>{t('ocrVerification')}</span>
+            </div>
+          </button>
+        )}
 
         {/* Settings & RBAC - Chỉ hiển thị cho Admin System có quyền SYSTEM_SETTINGS, HR Manager bị ẩn */}
         {hasPermission('SYSTEM_SETTINGS') && (

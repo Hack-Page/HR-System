@@ -122,6 +122,10 @@ export const EmployeeListPage: React.FC = () => {
 
   const handleSaveEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasPermission('MANAGE_EMPLOYEES')) {
+      error('Không đủ quyền', 'Bạn không có quyền chỉnh sửa thông tin nhân sự (MANAGE_EMPLOYEES).');
+      return;
+    }
     if (!editingEmployee) return;
 
     if (!editingEmployee.employeeId.trim() || !editingEmployee.fullName.trim()) {
@@ -577,13 +581,15 @@ export const EmployeeListPage: React.FC = () => {
                             <Plane className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        <button
-                          onClick={() => handleOpenAddEditModal(emp)}
-                          className="p-1.5 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
-                          title="Chỉnh sửa thông tin & phụ cấp"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
+                        {hasPermission('MANAGE_EMPLOYEES') && (
+                          <button
+                            onClick={() => handleOpenAddEditModal(emp)}
+                            className="p-1.5 text-slate-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition"
+                            title="Chỉnh sửa thông tin & phụ cấp"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         {hasPermission('MANAGE_EMPLOYEES') && emp.status !== 'RESIGNED' && (
                           <button
                             onClick={() => handleResignEmployee(emp)}

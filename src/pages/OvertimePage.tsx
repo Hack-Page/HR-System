@@ -108,7 +108,7 @@ export const OvertimePage: React.FC<OvertimePageProps> = ({ onNavigate }) => {
     return formatPayPeriodLabel(selectedMonth, selectedYear, cycleMode);
   }, [selectedMonth, selectedYear, cycleMode]);
 
-  // Total summary OT statistics
+  // Total summary OT statistics (scoped theo kỳ công và bộ phận đang chọn)
   const otSummary = useMemo(() => {
     let totalOTHours = 0;
     let pendingCount = 0;
@@ -116,7 +116,12 @@ export const OvertimePage: React.FC<OvertimePageProps> = ({ onNavigate }) => {
     let mismatchCount = 0;
     let earlyInCount = 0;
 
+    const activeDates = new Set(calendarDays.map(d => d.dateStr));
+    const activeEmpIds = new Set(filteredEmployees.map(e => e.employeeId));
+
     overtimes.forEach(ot => {
+      if (!activeDates.has(ot.date)) return;
+      if (!activeEmpIds.has(ot.employeeId)) return;
       totalOTHours += ot.hours;
       if (ot.verificationStatus === 'PENDING') pendingCount++;
       else if (ot.verificationStatus === 'MATCHED') verifiedCount++;
@@ -131,12 +136,14 @@ export const OvertimePage: React.FC<OvertimePageProps> = ({ onNavigate }) => {
       mismatchCount,
       earlyInCount
     };
-  }, [overtimes]);
+  }, [overtimes, calendarDays, filteredEmployees]);
+
+  const canManageOt = hasPermission('MANAGE_OT') || hasPermission('PROPOSE_DEPT_OT');
 
   // Mở modal xem / chỉnh sửa giờ OT và làm tròn thủ công
   const handleOpenCellModal = (emp: IEmployee, day: CalendarDay) => {
-    if (!hasPermission('MANAGE_OT')) {
-      warning('Không đủ quyền', 'Bạn không có quyền quản lý tăng ca (MANAGE_OT).');
+    if (!canManageOt) {
+      warning('Không đủ quyền', 'Bạn không có quyền quản lý tăng ca (MANAGE_OT hoặc PROPOSE_DEPT_OT).');
       return;
     }
 
@@ -179,6 +186,10 @@ export const OvertimePage: React.FC<OvertimePageProps> = ({ onNavigate }) => {
   // Lưu bản ghi OT sau khi chỉnh sửa
   const handleSaveOtRecord = async () => {
     if (!activeEditRecord) return;
+    if (!canManageOt) {
+      error('Không đủ quyền', 'Bạn không có quyền lưu giờ tăng ca.');
+      return;
+    }
     try {
       const updated: IOvertimeRecord = {
         ...activeEditRecord.otRecord,

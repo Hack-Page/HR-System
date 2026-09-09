@@ -293,4 +293,47 @@ describe('HRSystemDatabase v6 — Schema & Flag Indexes', () => {
 
     await v7Db.delete();
   });
+
+  it('(h) Snapshot sync v3.1 — importDatabaseFromSnapshot bảo toàn productionLines & productivityQualityRates', async () => {
+    const { importDatabaseFromSnapshot } = await import('../services/db-sync');
+    
+    const snapshotJson = JSON.stringify({
+      version: '3.1.0',
+      exportedAt: new Date().toISOString(),
+      exportedBy: 'HR Admin',
+      employees: [
+        { employeeId: 'LEP888', fullName: 'Sync Test', department: 'Production', position: 'Operator', startDate: '01/08/2026', contractType: 'OFFICIAL', shiftClassId: 'OFFICE_M_S', customAllowances: { pcccAllowance: 0, hazardousAllowance: 0, diligenceBonus: 500000, productivityBonus: 0, tradeUnionFee: -40000, otherFees: 0 }, annualLeaveBalance: { initialQuota: 12, usedDays: 0, remainingDays: 12 }, status: 'ACTIVE' }
+      ],
+      dailyTimesheets: [
+        { employeeId_date: 'LEP888_2026-08-01', employeeId: 'LEP888', date: '2026-08-01', statusCode: 'W', calculatedOvertime: 0, month: 8, year: 2026, isViolation: false }
+      ],
+      overtimeRecords: [],
+      leaveRequests: [],
+      shiftRosters: [],
+      ocrScans: [],
+      productionLines: [
+        { id: 'line_custom_9', name: 'Custom Line 9', description: 'Test Chuyền mới' }
+      ],
+      productivityQualityRates: [
+        { lineId_date: 'line_custom_9_2026-08-01', lineId: 'line_custom_9', date: '2026-08-01', month: 8, year: 2026, productivityRate: 110, qualityRate: 99 }
+      ]
+    });
+
+    const mockFile = new File([snapshotJson], 'test-sync.json', { type: 'application/json' });
+    const result = await importDatabaseFromSnapshot(mockFile);
+
+    expect(result.employeesCount).toBe(1);
+    expect(result.timesheetsCount).toBe(1);
+
+    // Kiểm tra productionLines được khôi phục
+    const lines = await db.productionLines.toArray();
+    expect(lines.length).toBe(1);
+    expect(lines[0].name).toBe('Custom Line 9');
+
+    // Kiểm tra productivityQualityRates được khôi phục
+    const rates = await db.productivityQualityRates.toArray();
+    expect(rates.length).toBe(1);
+    expect(rates[0].productivityRate).toBe(110);
+    expect(rates[0].qualityRate).toBe(99);
+  });
 });

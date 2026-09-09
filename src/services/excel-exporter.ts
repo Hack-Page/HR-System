@@ -1,9 +1,9 @@
-import { IEmployee, IDailyTimesheetCell, IOvertimeRecord, ISystemSettings } from '../types';
+import { IEmployee, IDailyTimesheetCell, IOvertimeRecord, ISystemSettings, IProductivityQualityRate } from '../types';
 import { computeEmployeeTimesheetSummary } from './formula-engine';
 import { FORMULA_DEFS, PRODUCTIVITY_FORMULA, DILIGENCE_FORMULA } from './formula-defs';
 import { generateCalendarDays, CalendarDay } from './calendar-utils';
 import { formatPayPeriodLabel } from './pay-period';
-import { DEFAULT_SETTINGS } from '../db';
+import { DEFAULT_SETTINGS, db } from '../db';
 
 type CycleMode = 'SEASONAL' | 'OFFICIAL' | 'ALL';
 
@@ -20,6 +20,13 @@ export async function exportTimesheetToExcel(
   // đảm bảo backward compat khi settings thiếu 2 field mới
   if (!settings.productivityBonusConfig) (settings as any).productivityBonusConfig = DEFAULT_SETTINGS.productivityBonusConfig;
   if (!settings.diligenceBonusConfig) (settings as any).diligenceBonusConfig = DEFAULT_SETTINGS.diligenceBonusConfig;
+
+  let productivityQualityRates: IProductivityQualityRate[] = [];
+  try {
+    productivityQualityRates = await db.productivityQualityRates.toArray();
+  } catch (e) {
+    console.warn('Failed to load productivityQualityRates for Excel export:', e);
+  }
 
   const mod: any = await import('exceljs');
   const ExcelJSNS = mod.default ?? mod;
@@ -43,9 +50,9 @@ export async function exportTimesheetToExcel(
 
     // Metadata header rows — chuẩn layout file gốc
     ws.getRow(1).height = 6;
-    // Logo
+    // Logo — đường dẫn tương đối để sống được cả file:// (OneDrive offline) lẫn sub-path
     try {
-      const response = await fetch('/Leggett.jpg');
+      const response = await fetch('./Leggett.jpg');
       if (response.ok) {
         const blob = await response.blob();
         const arrayBuffer = await blob.arrayBuffer();
@@ -182,6 +189,33 @@ export async function exportTimesheetToExcel(
     const timesheetCellMap = new Map<string, IDailyTimesheetCell>();
     timesheets.forEach(c => timesheetCellMap.set(c.employeeId_date, c));
 
+    // Tính tỷ lệ trung bình % NS và % CL của từng chuyền sản xuất trong kỳ của sheet
+    const lineAverageRatesMap = (() => {
+      const stats = new Map<string, { sumNS: number; countNS: number; sumCL: number; countCL: number }>();
+      const activeDates = new Set(calendarDays.map(d => d.dateStr));
+
+      productivityQualityRates.forEach(r => {
+        if (activeDates.has(r.date)) {
+          let entry = stats.get(r.lineId);
+          if (!entry) {
+            entry = { sumNS: 0, countNS: 0, sumCL: 0, countCL: 0 };
+            stats.set(r.lineId, entry);
+          }
+          if (r.productivityRate != null) { entry.sumNS += r.productivityRate; entry.countNS++; }
+          if (r.qualityRate != null) { entry.sumCL += r.qualityRate; entry.countCL++; }
+        }
+      });
+
+      const result = new Map<string, { avgNS: number; avgCL: number }>();
+      stats.forEach((v, k) => {
+        result.set(k, {
+          avgNS: v.countNS > 0 ? Math.round(v.sumNS / v.countNS) : 100,
+          avgCL: v.countCL > 0 ? Math.round(v.sumCL / v.countCL) : 98
+        });
+      });
+      return result;
+    })();
+
     sheetEmployees.forEach((emp, empIdx) => {
       const r = 8 + empIdx;
       const empCells: IDailyTimesheetCell[] = [];
@@ -195,6 +229,7 @@ export async function exportTimesheetToExcel(
         ? settings.productivityBonusConfig.departmentBaseRates[emp.department]!
         : (emp.customAllowances?.productivityBonus || settings.productivityBonusConfig.defaultBaseRate);
       const diligenceBase = emp.customAllowances?.diligenceBonus || settings.diligenceBonusConfig.baseAmount;
+      const lineRates = emp.productionLine ? lineAverageRatesMap.get(emp.productionLine) : undefined;
 
       const summary = computeEmployeeTimesheetSummary(emp, empCells, {
         diligenceRules: deptRule ? { twoDaysULPenaltyPct: deptRule.twoDaysULPenaltyPct, threeDaysULPenaltyPct: deptRule.threeDaysULPenaltyPct } : undefined,
@@ -202,6 +237,8 @@ export async function exportTimesheetToExcel(
         countOffAsUL: settings.diligenceBonusConfig?.countOffAsUL ?? true,
         productivityBaseRate: prodBase,
         productivityConfig: settings.productivityBonusConfig,
+        lineProductivityRate: lineRates?.avgNS,
+        lineQualityRate: lineRates?.avgCL,
         tradeUnionFee: settings.tradeUnionFee ?? 40000,
         extraBonus: emp.customAllowances?.extraBonus ?? 0
       });

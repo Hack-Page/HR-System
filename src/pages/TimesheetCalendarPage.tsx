@@ -56,6 +56,7 @@ export const TimesheetCalendarPage: React.FC = () => {
   const employees = useLiveQuery(() => db.employees.toArray(), []) || [];
   const timesheets = useLiveQuery(() => db.dailyTimesheets.toArray(), []) || [];
   const overtimes = useLiveQuery(() => db.overtimeRecords.toArray(), []) || [];
+  const rates = useLiveQuery(() => db.productivityQualityRates.toArray(), []) || [];
 
   const handleClearTimesheetData = async () => {
     if (!hasPermission('MANAGE_TIMESHEET')) {
@@ -73,7 +74,9 @@ export const TimesheetCalendarPage: React.FC = () => {
       await db.dailyTimesheets.clear();
       await db.rawAttendanceLogs.clear();
       await db.overtimeRecords.clear();
-      success('Đã làm sạch bảng chấm công', 'Toàn bộ dữ liệu bảng công và tăng ca đã được xóa sạch. Sẵn sàng nạp file nguồn mới.');
+      await db.leaveRequests.clear();
+      await db.shiftRosters.clear();
+      success('Đã làm sạch bảng chấm công', 'Toàn bộ dữ liệu bảng công, tăng ca, danh sách chờ bù phép và vi phạm ca đã được xóa sạch. Sẵn sàng nạp file nguồn mới.');
     }
   };
 
@@ -109,6 +112,33 @@ export const TimesheetCalendarPage: React.FC = () => {
 
   const calendarDaysSingle = cycleMode === 'OFFICIAL' ? officialDays : seasonalDays;
 
+  // Tính tỷ lệ trung bình % NS và % CL của từng chuyền sản xuất trong kỳ đang xem
+  const lineAverageRatesMap = useMemo(() => {
+    const stats = new Map<string, { sumNS: number; countNS: number; sumCL: number; countCL: number }>();
+    const activeDates = new Set(calendarDaysSingle.map(d => d.dateStr));
+
+    rates.forEach(r => {
+      if (activeDates.has(r.date)) {
+        let entry = stats.get(r.lineId);
+        if (!entry) {
+          entry = { sumNS: 0, countNS: 0, sumCL: 0, countCL: 0 };
+          stats.set(r.lineId, entry);
+        }
+        if (r.productivityRate != null) { entry.sumNS += r.productivityRate; entry.countNS++; }
+        if (r.qualityRate != null) { entry.sumCL += r.qualityRate; entry.countCL++; }
+      }
+    });
+
+    const result = new Map<string, { avgNS: number; avgCL: number }>();
+    stats.forEach((v, k) => {
+      result.set(k, {
+        avgNS: v.countNS > 0 ? Math.round(v.sumNS / v.countNS) : 100,
+        avgCL: v.countCL > 0 ? Math.round(v.sumCL / v.countCL) : 98
+      });
+    });
+    return result;
+  }, [rates, calendarDaysSingle]);
+
   const handleCellClick = (emp: IEmployee, day: CalendarDay) => {
     if (!hasPermission('MANAGE_TIMESHEET')) {
       warning?.('Không đủ quyền', 'Bạn không có quyền chỉnh sửa bảng chấm công (MANAGE_TIMESHEET).');
@@ -135,7 +165,16 @@ export const TimesheetCalendarPage: React.FC = () => {
 
   const handleSaveCell = async (newCode: AttendanceStatusCode) => {
     if (!activeEditCell) return;
-    const updated = { ...activeEditCell.cell, statusCode: newCode };
+    const isVio = ['LA', 'ED', 'MCO', 'MCI', 'Off', 'OFF'].includes(newCode);
+    const updated: IDailyTimesheetCell = {
+      ...activeEditCell.cell,
+      statusCode: newCode,
+      isViolation: isVio,
+      isViolationFlag: (isVio ? 1 : 0) as (0 | 1),
+      violationNote: isVio
+        ? (activeEditCell.cell.violationNote || `Điều chỉnh thủ công sang mã vi phạm ${newCode}`)
+        : undefined
+    };
     await db.dailyTimesheets.put(updated);
     success('Đã cập nhật công', `Nhân viên ${activeEditCell.employee.fullName} ngày ${activeEditCell.dateLabel} đã được chuyển sang mã "${newCode}".`);
     setActiveEditCell(null);
@@ -199,12 +238,15 @@ export const TimesheetCalendarPage: React.FC = () => {
                 ? systemSettings.productivityBonusConfig.departmentBaseRates[emp.department]!
                 : (emp.customAllowances?.productivityBonus || systemSettings.productivityBonusConfig?.defaultBaseRate || 1000000);
               const diligenceBase = systemSettings.diligenceBonusConfig?.baseAmount ?? 500000;
+              const lineRates = emp.productionLine ? lineAverageRatesMap.get(emp.productionLine) : undefined;
               const summary = computeEmployeeTimesheetSummary(emp, empCells, {
                 diligenceRules: deptRule ? { twoDaysULPenaltyPct: deptRule.twoDaysULPenaltyPct, threeDaysULPenaltyPct: deptRule.threeDaysULPenaltyPct } : undefined,
                 diligenceBaseAmount: emp.customAllowances?.diligenceBonus || diligenceBase,
                 countOffAsUL: systemSettings.diligenceBonusConfig?.countOffAsUL ?? true,
                 productivityBaseRate: prodBase,
                 productivityConfig: systemSettings.productivityBonusConfig,
+                lineProductivityRate: lineRates?.avgNS,
+                lineQualityRate: lineRates?.avgCL,
                 tradeUnionFee: systemSettings.tradeUnionFee ?? 40000,
                 extraBonus: emp.customAllowances?.extraBonus ?? 0
               });

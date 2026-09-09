@@ -7,17 +7,30 @@ export type ContractTypeLoose = 'OFFICIAL' | 'SEASONAL' | string;
 
 export function parseDateLoose(s?: string): Date | null {
   if (!s) return null;
-  if (s.includes('/')) {
-    const [d,m,y] = s.split('/').map(Number);
+  const cleanStr = s.split('T')[0].split(' ')[0].trim();
+  if (cleanStr.includes('/')) {
+    const [d, m, y] = cleanStr.split('/').map(Number);
     if (!d || !m || !y) return null;
-    return new Date(y, m-1, d);
+    return new Date(y, m - 1, d);
   }
-  if (s.includes('-')) {
-    const [y,m,d] = s.split('-').map(Number);
-    if (!y || !m || !d) return null;
-    return new Date(y, m-1, d);
+  if (cleanStr.includes('-')) {
+    const parts = cleanStr.split('-').map(Number);
+    if (parts.length === 3) {
+      if (parts[0] > 1000) {
+        // YYYY-MM-DD
+        const [y, m, d] = parts;
+        if (!y || !m || !d) return null;
+        return new Date(y, m - 1, d);
+      } else {
+        // DD-MM-YYYY
+        const [d, m, y] = parts;
+        if (!d || !m || !y) return null;
+        return new Date(y, m - 1, d);
+      }
+    }
   }
-  return null;
+  const fallback = new Date(s);
+  return isNaN(fallback.getTime()) ? null : fallback;
 }
 
 export interface PayPeriod {

@@ -195,11 +195,25 @@ export const ShiftAssignmentPage: React.FC = () => {
       for (const dateStr of dateRange) {
         // Kiểm tra ca trước để tính vi phạm 12h (giống ShiftRosterPage)
         const prevDate = addDays(dateStr, -1);
-        const prevRoster = shiftRosters.find(r => r.employeeId === empId && r.date === prevDate);
+        const prevRoster = toSave.find(r => r.employeeId === empId && r.date === prevDate)
+          || shiftRosters.find(r => r.employeeId === empId && r.date === prevDate);
         const prevEnd = prevRoster?.endTime;
         let isViolating = false;
-        if (shiftCode === 'SHIFT_1' && prevEnd === '22:00') isViolating = true;
-        // SHIFT_2 và HC không vi phạm khi nối tiếp
+        let restHours = 16;
+        let violationDetails: string | undefined;
+
+        if (prevEnd === '22:00') {
+          if (shiftCode === 'SHIFT_1') {
+            isViolating = true;
+            restHours = 8;
+            violationDetails = 'Nghỉ 8 giờ giữa Ca 2 (kết thúc 22h) và Ca 1 (bắt đầu 06h) < 12h';
+          } else if (shiftCode === 'OFFICE_M_F' || (shiftCode as any) === 'OFFICE_M_S') {
+            isViolating = true;
+            restHours = 9.5;
+            violationDetails = 'Nghỉ 9.5 giờ giữa Ca 2 (kết thúc 22h) và Giờ hành chính (bắt đầu 07h30) < 12h';
+          }
+        }
+
         toSave.push({
           employeeId_date: `${empId}_${dateStr}`,
           employeeId: empId,
@@ -210,10 +224,10 @@ export const ShiftAssignmentPage: React.FC = () => {
           startTime: start,
           endTime: end,
           previousShiftEndTime: prevEnd,
-          restHours: isViolating ? 8 : 16,
+          restHours,
           isRestViolation: isViolating,
           isRestViolationFlag: isViolating ? 1 : 0,
-          violationDetails: isViolating ? 'Nghỉ 8 giờ giữa Ca 2 (kết thúc 22h) và Ca 1 (bắt đầu 06h) < 12h' : undefined,
+          violationDetails,
         });
       }
     }
